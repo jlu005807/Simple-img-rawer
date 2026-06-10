@@ -8,6 +8,7 @@
     nodes: 'simple-img-static.nodes.v1',
     draft: 'simple-img-static.draft.v1',
     links: 'simple-img-static.links.v1',
+    theme: 'simple-img-static.theme.v1',
   }
 
   const state = {
@@ -29,6 +30,7 @@
   function init() {
     bindElements()
     bindEvents()
+    restoreTheme()
     state.nodes = loadNodes()
     state.results = loadSavedLinks()
     restoreDraft()
@@ -43,6 +45,7 @@
   function bindElements() {
     Object.assign(elements, {
       nodeForm: document.querySelector('#node-form'),
+      themeToggle: document.querySelector('#theme-toggle'),
       nodeId: document.querySelector('#node-id'),
       nodeName: document.querySelector('#node-name'),
       nodeBaseUrl: document.querySelector('#node-base-url'),
@@ -83,6 +86,7 @@
   }
 
   function bindEvents() {
+    elements.themeToggle.addEventListener('click', toggleTheme)
     elements.nodeForm.addEventListener('submit', onNodeSubmit)
     elements.resetNode.addEventListener('click', resetNodeForm)
     elements.revealKey.addEventListener('click', toggleKeyVisibility)
@@ -282,7 +286,7 @@
       saveLinks()
       renderResults()
       const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
-      setStatus(`生成完成：${result.urls.length} 张图片，耗时 ${seconds}s。请在一小时内下载。`, 'ok')
+      setStatus(`生成完成：${result.urls.length} 张图片，耗时 ${seconds}s。链接过期后会自动清理。`, 'ok')
     } catch (error) {
       if (state.abortController && state.abortController.signal.aborted) {
         setStatus('已停止当前生成', 'idle')
@@ -717,7 +721,11 @@
   }
 
   function renderResults() {
+    const beforeCount = state.results.length
     state.results = state.results.filter((item) => !isExpired(item))
+    if (beforeCount !== state.results.length) {
+      saveLinks()
+    }
     if (!state.results.length) {
       state.activeResultId = ''
       elements.resultGrid.innerHTML = '<div class="result-placeholder">生成后显示图片链接</div>'
@@ -738,7 +746,7 @@
         (item) => `
           <button type="button" class="result-tile ${item.id === state.activeResultId ? 'active' : ''}" data-result-id="${escapeAttribute(item.id)}">
             <img src="${escapeAttribute(item.url)}" alt="生成图片">
-            <span>${timeLeftLabel(item.expiresAt)}</span>
+            <span>${resultBadgeLabel(item)}</span>
           </button>
         `,
       )
@@ -750,7 +758,7 @@
     elements.resultPreview.src = active.url
     elements.resultPreview.hidden = false
     elements.resultEmpty.hidden = true
-    elements.resultMeta.textContent = `${active.nodeName || '未知节点'} · ${protocolLabel(active.protocol)} · ${timeLeftLabel(active.expiresAt)}`
+    elements.resultMeta.textContent = `${active.nodeName || '未知节点'} · ${protocolLabel(active.protocol)} · 临时链接`
     elements.resultLink.value = active.url
     elements.resultActions.hidden = false
   }
@@ -848,6 +856,37 @@
     elements.imageCount.value = draft.n || 1
   }
 
+  function restoreTheme() {
+    let theme = 'light'
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEYS.theme)
+      if (saved === 'dark' || saved === 'light') {
+        theme = saved
+      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark'
+      }
+    } catch {
+      /* keep light */
+    }
+    applyTheme(theme)
+  }
+
+  function toggleTheme() {
+    const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.theme, nextTheme)
+    } catch {
+      /* ignore storage errors */
+    }
+    applyTheme(nextTheme)
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.dataset.theme = theme
+    elements.themeToggle.textContent = theme === 'dark' ? '亮色' : '深色'
+    elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false')
+  }
+
   function loadNodes() {
     return loadJson(STORAGE_KEYS.nodes, []).map((item) => core.normalizeNode(item))
   }
@@ -899,7 +938,7 @@
     if (clockTimer) {
       return
     }
-    clockTimer = window.setInterval(renderResults, 1000)
+    clockTimer = window.setInterval(renderResults, 30000)
   }
 
   function sleep(ms, signal) {
@@ -939,18 +978,8 @@
     return Number.isFinite(expiresAt) && expiresAt <= Date.now()
   }
 
-  function timeLeftLabel(expiresAt) {
-    const diff = Date.parse(expiresAt) - Date.now()
-    if (!Number.isFinite(diff) || diff <= 0) {
-      return '已过期'
-    }
-    const minutes = Math.floor(diff / 60000)
-    const seconds = Math.floor((diff % 60000) / 1000)
-    if (minutes >= 60) {
-      const hours = Math.floor(minutes / 60)
-      return `${hours}h ${minutes % 60}m`
-    }
-    return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+  function resultBadgeLabel(item) {
+    return String(item.url || '').startsWith('data:image/') ? '内联' : '链接'
   }
 
   function extensionForUrl(url) {

@@ -42,6 +42,20 @@ test('extracts generated image links from common provider response shapes', () =
   )
 })
 
+test('prefers one provider URL when the same response item also includes b64 data', () => {
+  assert.deepEqual(
+    core.extractImageUrls({
+      data: [
+        {
+          b64_json: 'same-image-inline-copy',
+          url: 'https://aiapi1.cc.cd/generated/result.png',
+        },
+      ],
+    }),
+    ['https://aiapi1.cc.cd/generated/result.png'],
+  )
+})
+
 test('uses upstream expiry when present and otherwise falls back to one hour', () => {
   const now = Date.parse('2026-06-10T10:00:00.000Z')
   assert.equal(core.resolveExpiresAt('2026-06-10T11:30:00.000Z', now), '2026-06-10T11:30:00.000Z')

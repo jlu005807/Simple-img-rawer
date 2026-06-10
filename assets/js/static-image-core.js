@@ -165,11 +165,10 @@
       }
 
       const localFormat = value.output_format || inheritedFormat || responseDefaultFormat || 'png'
-      if (typeof value.b64_json === 'string' && value.b64_json.trim()) {
-        add(toDataImageUrl(value.b64_json, localFormat), true)
-      }
       if (typeof value.url === 'string') {
         add(value.url, true)
+      } else if (typeof value.b64_json === 'string' && value.b64_json.trim()) {
+        add(toDataImageUrl(value.b64_json, localFormat), true)
       }
 
       const keys = [

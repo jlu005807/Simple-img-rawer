@@ -15,20 +15,165 @@
           <h1>静态图片生成器</h1>
           <p>浏览器直连节点生成图片，配置只保存在本机。</p>
         </div>
-        <div id="status-text" class="status-pill" data-level="idle" aria-live="polite">初始化</div>
+        <div class="topbar-actions">
+          <button id="theme-toggle" class="ghost theme-toggle" type="button" aria-pressed="false">深色</button>
+          <div id="status-text" class="status-pill" data-level="idle" aria-live="polite">初始化</div>
+        </div>
       </header>
 
       <section class="notice" aria-label="安全提示">
-        <strong>图片不做持久化；生成结果按一小时有效期处理，请尽快下载。</strong>
+        <strong>图片不做持久化；结果链接过期后自动清理，请及时下载。</strong>
         <span>节点需要允许浏览器 CORS。</span>
       </section>
 
-      <main class="workspace image-first">
+      <main class="workspace three-column">
+        <section class="panel node-panel compact-panel" aria-labelledby="node-title">
+          <div class="panel-header">
+            <h2 id="node-title">API 节点</h2>
+            <span id="node-count">0/0 启用</span>
+          </div>
+
+          <form id="node-form" class="form-grid">
+            <input id="node-id" type="hidden">
+
+            <div class="field-row">
+              <div class="field">
+                <label for="node-name">节点名称</label>
+                <input id="node-name" autocomplete="off" placeholder="主节点">
+              </div>
+              <div class="field">
+                <label for="node-model">模型</label>
+                <input id="node-model" autocomplete="off" value="gpt-image-2">
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="node-base-url">base_url</label>
+              <input id="node-base-url" autocomplete="off" placeholder="https://api.example.com">
+            </div>
+
+            <div class="field">
+              <label for="node-api-key">API Key</label>
+              <div class="input-with-button">
+                <input id="node-api-key" type="password" autocomplete="off" placeholder="sk-...">
+                <button id="reveal-key" type="button" title="显示或隐藏 Key">◐</button>
+              </div>
+              <span class="small-text">Key 仅存于本机浏览器 localStorage。</span>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="node-protocol">接入协议</label>
+                <select id="node-protocol">
+                  <option value="auto">自动尝试</option>
+                  <option value="openai">OpenAI 兼容</option>
+                  <option value="chat">Chat Completions</option>
+                  <option value="custom">自定义 URL</option>
+                  <option value="async">异步中转</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="node-timeout">超时秒数</label>
+                <input id="node-timeout" type="number" min="1" step="1" value="180">
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="node-retry">重试次数</label>
+                <input id="node-retry" type="number" min="0" step="1" value="0">
+              </div>
+
+              <label class="check-row">
+                <input id="node-enabled" type="checkbox" checked>
+                启用节点
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button id="save-node" class="primary" type="submit">保存节点</button>
+              <button id="reset-node" type="button">清空</button>
+            </div>
+          </form>
+
+          <ul id="node-list" class="node-list"></ul>
+        </section>
+
+        <section class="panel generation-panel compact-panel" aria-labelledby="generation-title">
+          <div class="panel-header">
+            <h2 id="generation-title">提示词与参数</h2>
+            <span>按节点顺序 fallback</span>
+          </div>
+
+          <form id="generation-form" class="form-grid">
+            <div class="field">
+              <label for="prompt">提示词</label>
+              <textarea id="prompt" placeholder="描述你想生成的图片"></textarea>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="size">尺寸</label>
+                <select id="size">
+                  <option value="1024x1024">1024 x 1024</option>
+                  <option value="1360x1024">4:3</option>
+                  <option value="1024x1360">3:4</option>
+                  <option value="1536x864">16:9</option>
+                  <option value="864x1536">9:16</option>
+                  <option value="auto">auto</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="quality">质量</label>
+                <select id="quality">
+                  <option value="">默认</option>
+                  <option value="auto">auto</option>
+                  <option value="low">low</option>
+                  <option value="medium">medium</option>
+                  <option value="high">high</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label for="image-count">数量</label>
+                <input id="image-count" type="number" min="1" max="4" step="1" value="1">
+              </div>
+
+              <div class="field">
+                <label for="reference-input">参考图</label>
+                <div class="reference-toolbar">
+                  <input id="reference-input" type="file" accept="image/*" multiple>
+                  <button id="clear-references" type="button">清除</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="reference-list" class="reference-list"></div>
+
+            <div class="run-row">
+              <button id="generate" class="primary" type="submit">生成图片</button>
+              <button id="stop" class="danger" type="button" disabled>停止</button>
+            </div>
+          </form>
+
+          <div class="panel-subheader">
+            <h3 id="attempt-title">请求记录</h3>
+            <span>节点 / 协议 / URL</span>
+          </div>
+          <div class="form-grid monitor-grid">
+            <ul id="attempt-list" class="attempt-list"></ul>
+          </div>
+        </section>
+
         <section class="panel result-panel result-stage" aria-labelledby="result-title">
           <div class="panel-header">
             <div>
-              <h2 id="result-title">结果预览</h2>
-              <span>生成后优先在这里查看、复制和下载</span>
+              <h2 id="result-title">结果显示</h2>
+              <span>过期链接会自动清理</span>
             </div>
             <button id="clear-links" class="ghost" type="button">清理链接</button>
           </div>
@@ -48,157 +193,11 @@
                 <button id="download" class="primary" type="button">下载</button>
               </div>
             </div>
-            <div class="result-warning">链接会保留到本地浏览器；内联 data:image 结果只在当前页面内保留，不写入 localStorage。</div>
+            <div class="result-warning">同一响应同时返回 data:image 和可访问 URL 时，只保留 URL 作为统一下载链接。</div>
           </div>
 
           <div id="result-grid" class="result-grid"></div>
         </section>
-
-        <aside class="control-rail" aria-label="生成控制">
-          <section class="panel generation-panel compact-panel" aria-labelledby="generation-title">
-            <div class="panel-header">
-              <h2 id="generation-title">生成设置</h2>
-              <span>按节点顺序 fallback</span>
-            </div>
-
-            <form id="generation-form" class="form-grid">
-              <div class="field">
-                <label for="prompt">提示词</label>
-                <textarea id="prompt" placeholder="描述你想生成的图片"></textarea>
-              </div>
-
-              <div class="field-row">
-                <div class="field">
-                  <label for="size">尺寸</label>
-                  <select id="size">
-                    <option value="1024x1024">1024 x 1024</option>
-                    <option value="1360x1024">4:3</option>
-                    <option value="1024x1360">3:4</option>
-                    <option value="1536x864">16:9</option>
-                    <option value="864x1536">9:16</option>
-                    <option value="auto">auto</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="quality">质量</label>
-                  <select id="quality">
-                    <option value="">默认</option>
-                    <option value="auto">auto</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field">
-                  <label for="image-count">数量</label>
-                  <input id="image-count" type="number" min="1" max="4" step="1" value="1">
-                </div>
-
-                <div class="field">
-                  <label for="reference-input">参考图</label>
-                  <div class="reference-toolbar">
-                    <input id="reference-input" type="file" accept="image/*" multiple>
-                    <button id="clear-references" type="button">清除</button>
-                  </div>
-                </div>
-              </div>
-
-              <div id="reference-list" class="reference-list"></div>
-
-              <div class="run-row">
-                <button id="generate" class="primary" type="submit">生成图片</button>
-                <button id="stop" class="danger" type="button" disabled>停止</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="panel node-panel compact-panel" aria-labelledby="node-title">
-            <div class="panel-header">
-              <h2 id="node-title">API 节点</h2>
-              <span id="node-count">0/0 启用</span>
-            </div>
-
-            <form id="node-form" class="form-grid">
-              <input id="node-id" type="hidden">
-
-              <div class="field-row">
-                <div class="field">
-                  <label for="node-name">节点名称</label>
-                  <input id="node-name" autocomplete="off" placeholder="主节点">
-                </div>
-                <div class="field">
-                  <label for="node-model">模型</label>
-                  <input id="node-model" autocomplete="off" value="gpt-image-2">
-                </div>
-              </div>
-
-              <div class="field">
-                <label for="node-base-url">base_url</label>
-                <input id="node-base-url" autocomplete="off" placeholder="https://api.example.com">
-              </div>
-
-              <div class="field">
-                <label for="node-api-key">API Key</label>
-                <div class="input-with-button">
-                  <input id="node-api-key" type="password" autocomplete="off" placeholder="sk-...">
-                  <button id="reveal-key" type="button" title="显示或隐藏 Key">◐</button>
-                </div>
-                <span class="small-text">Key 仅存于本机浏览器 localStorage。</span>
-              </div>
-
-              <div class="field-row">
-                <div class="field">
-                  <label for="node-protocol">接入协议</label>
-                  <select id="node-protocol">
-                    <option value="auto">自动尝试</option>
-                    <option value="openai">OpenAI 兼容</option>
-                    <option value="chat">Chat Completions</option>
-                    <option value="custom">自定义 URL</option>
-                    <option value="async">异步中转</option>
-                  </select>
-                </div>
-
-                <div class="field">
-                  <label for="node-timeout">超时秒数</label>
-                  <input id="node-timeout" type="number" min="1" step="1" value="180">
-                </div>
-              </div>
-
-              <div class="field-row">
-                <div class="field">
-                  <label for="node-retry">重试次数</label>
-                  <input id="node-retry" type="number" min="0" step="1" value="0">
-                </div>
-
-                <label class="check-row">
-                  <input id="node-enabled" type="checkbox" checked>
-                  启用节点
-                </label>
-              </div>
-
-              <div class="form-actions">
-                <button id="save-node" class="primary" type="submit">保存节点</button>
-                <button id="reset-node" type="button">清空</button>
-              </div>
-            </form>
-
-            <ul id="node-list" class="node-list"></ul>
-          </section>
-
-          <section class="panel monitor-panel compact-panel" aria-labelledby="attempt-title">
-            <div class="panel-header">
-              <h2 id="attempt-title">请求记录</h2>
-              <span>节点 / 协议 / URL</span>
-            </div>
-            <div class="form-grid">
-              <ul id="attempt-list" class="attempt-list"></ul>
-            </div>
-          </section>
-        </aside>
       </main>
     </div>
   </body>
