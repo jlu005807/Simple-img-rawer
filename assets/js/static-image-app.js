@@ -435,17 +435,32 @@
 
   async function runAsyncProvider(node, payload, references, signal) {
     const submitUrl = core.requestUrlFor(node, 'async')
-    const body = cleanBody({
-      model: node.model,
-      prompt: payload.prompt,
-      n: payload.n,
-      size: payload.size === 'auto' ? undefined : payload.size,
-      quality: payload.quality || undefined,
-      reference_images: references.length ? references.map((item) => item.url) : undefined,
-    })
+    const hasReferences = references.length > 0
+    let body
+    if (hasReferences) {
+      body = new FormData()
+      body.append('model', node.model)
+      body.append('prompt', payload.prompt)
+      body.append('n', String(payload.n))
+      if (payload.size !== 'auto') {
+        body.append('size', payload.size)
+      }
+      if (payload.quality) {
+        body.append('quality', payload.quality)
+      }
+      references.forEach((item) => body.append('image', item.file, item.file.name || 'reference.png'))
+    } else {
+      body = JSON.stringify(cleanBody({
+        model: node.model,
+        prompt: payload.prompt,
+        n: payload.n,
+        size: payload.size === 'auto' ? undefined : payload.size,
+        quality: payload.quality || undefined,
+      }))
+    }
     const submitResponse = await fetchWithTimeout(
       submitUrl,
-      { method: 'POST', headers: authHeaders(node, true), body: JSON.stringify(body) },
+      { method: 'POST', headers: authHeaders(node, !hasReferences), body },
       node.timeout_seconds,
       signal,
     )
@@ -462,9 +477,7 @@
     if (!taskId) {
       throw new Error('异步节点未返回 task_id')
     }
-    const pollUrl = isFnuu(node.base_url)
-      ? `${core.asyncBaseUrl(node.base_url)}/async/task/${encodeURIComponent(taskId)}`
-      : core.resolveAsyncPollUrl(node.base_url, taskId, submitObject.poll_url)
+    const pollUrl = core.resolveAsyncPollUrl(node.base_url, taskId, submitObject.poll_url)
 
     let pollCount = 0
     while (true) {
@@ -1037,15 +1050,6 @@
       return match ? match[1].toLowerCase() : 'png'
     } catch {
       return 'png'
-    }
-  }
-
-  function isFnuu(baseUrl) {
-    try {
-      const host = new URL(baseUrl).hostname.toLowerCase()
-      return host === 'fnuu.net' || host === 'www.fnuu.net'
-    } catch {
-      return false
     }
   }
 

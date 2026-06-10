@@ -10,6 +10,17 @@ test('builds provider endpoints without duplicating /v1', () => {
   assert.equal(core.requestUrlFor({ base_url: 'https://custom.example.com/path', api_type: 'custom' }, 'custom'), 'https://custom.example.com/path')
 })
 
+test('resolves documented async image polling URLs', () => {
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', '47528f39a8644bdfae66dc0bb1f430dd', '/async/images/47528f39a8644bdfae66dc0bb1f430dd'),
+    'https://fnuu.net/async/images/47528f39a8644bdfae66dc0bb1f430dd',
+  )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net/v1', '47528f39a8644bdfae66dc0bb1f430dd', ''),
+    'https://fnuu.net/async/images/47528f39a8644bdfae66dc0bb1f430dd',
+  )
+})
+
 test('expands auto protocol candidates in fallback order', () => {
   assert.deepEqual(core.protocolCandidates({ base_url: 'https://api.example.com', api_type: 'auto' }), ['openai', 'async', 'chat'])
   assert.deepEqual(core.protocolCandidates({ base_url: 'https://fnuu.net', api_type: 'auto' }), ['async', 'openai', 'chat'])

@@ -45,6 +45,18 @@ Base URL 根据协议有不同含义：
 
 `自动` 协议会按当前节点特征选择候选顺序，普通节点优先尝试 OpenAI 兼容接口，已知异步中转节点优先尝试异步接口。
 
+## 异步节点
+
+异步协议按 `fnuu.net` 的接口文档处理：
+
+- 提交任务：`POST /async/images`。
+- 文生图请求体：JSON，包含 `model`、`prompt`、`n`，可选 `size` 和 `quality`。
+- 参考图生图：使用 `multipart/form-data`，字段名为 `image`，直接上传本地文件；浏览器会自动设置 multipart 边界，代码不会手动写 `Content-Type`。
+- 轮询任务：优先使用提交响应里的 `poll_url`；没有 `poll_url` 时使用 `/async/images/{task_id}`。
+- 轮询间隔：4 秒，符合文档建议的 3-5 秒。
+- 节点超时建议：`gpt-image-2` 单张通常需要 1-3 分钟，建议把节点超时设为 180 秒或更高。
+- 完成结果：`status` 为 `completed` 时，从 `urls` 数组读取临时图片直链；`failed` 时显示接口返回的错误原因。
+
 ## 下载策略
 
 浏览器对跨域图片下载有限制：
