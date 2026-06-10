@@ -57,3 +57,21 @@ test('download prefers inline data when the result has a separate download URL',
   assert.match(app, /downloadUrl\.startsWith\('data:image\/'\)/)
   assert.match(app, /triggerDownload\(downloadUrl,\s*filename\)/)
 })
+
+test('entry embeds giscus comments and syncs the comment theme', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
+
+  assert.match(html, /class="giscus-comments"/)
+  assert.match(html, /data-repo="jlu005807\/Simple-img-rawer"/)
+  assert.match(html, /data-category="Announcements"/)
+  assert.match(html, /data-theme="light"/)
+  assert.match(html, /分享提示词和生成的图片/)
+  assert.match(app, /syncGiscusTheme\(theme\)/)
+  assert.match(app, /querySelector\('iframe\.giscus-frame'\)/)
+  assert.match(app, /postMessage\(\{\s*giscus:\s*\{\s*setConfig:\s*\{\s*theme\s*\}/s)
+  assert.match(readme, /giscus/)
+  assert.match(readme, /克隆|fork/i)
+  assert.match(readme, /弃用|移除/)
+})

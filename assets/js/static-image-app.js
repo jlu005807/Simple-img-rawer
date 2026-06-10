@@ -907,6 +907,25 @@
     document.documentElement.dataset.theme = theme
     elements.themeToggle.textContent = theme === 'dark' ? '亮色' : '深色'
     elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false')
+    syncGiscusTheme(theme)
+  }
+
+  function syncGiscusTheme(value) {
+    const theme = value === 'dark' ? 'dark' : 'light'
+    const script = document.querySelector('#giscus-script')
+    if (script) {
+      script.setAttribute('data-theme', theme)
+    }
+    postGiscusTheme(theme)
+    window.setTimeout(() => postGiscusTheme(theme), 1000)
+  }
+
+  function postGiscusTheme(theme) {
+    const frame = document.querySelector('iframe.giscus-frame')
+    if (!frame || !frame.contentWindow) {
+      return
+    }
+    frame.contentWindow.postMessage({ giscus: { setConfig: { theme } } }, 'https://giscus.app')
   }
 
   function loadNodes() {

@@ -11,6 +11,18 @@
 - 深色模式：自动跟随系统偏好，也可以手动切换。
 - 结果自动清理：过期链接会在渲染时从本地状态移除。
 - 下载优先使用内联数据：如果接口同一结果同时返回远程 URL 和 `b64_json`，页面只展示远程 URL，但下载按钮优先使用 `data:image`，避免跨域下载失败。
+- giscus 评论区：页面底部可以围绕生成结果讨论，适合分享提示词、参数和生成的图片。
+
+## 评论区
+
+页面底部集成了 giscus 评论系统，当前配置绑定到 `jlu005807/Simple-img-rawer` 仓库的 `Announcements` 分类。生成图片后，欢迎把提示词、参数、生成图链接或截图分享到下方评论区，方便复现和交流。
+
+如果你克隆或 fork 这个仓库，需要二选一处理 giscus：
+
+1. 继续使用评论区：在自己的 GitHub 仓库开启 Discussions，到 giscus 配置页生成新的 `data-repo`、`data-repo-id`、`data-category` 和 `data-category-id`，然后替换 `index.html` 里的 giscus 脚本属性。
+2. 弃用评论区：删除 `index.html` 里的 `.giscus-comments` 区块；如果想彻底清理，也可以移除 `static-image-app.js` 中的 `syncGiscusTheme` 和 `postGiscusTheme`。
+
+评论区主题会跟随页面深色/亮色模式切换。
 
 ## 使用方式
 

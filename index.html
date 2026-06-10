@@ -193,12 +193,38 @@
                 <button id="download" class="primary" type="button">下载</button>
               </div>
             </div>
-            <div class="result-warning">同一响应同时返回 data:image 和可访问 URL 时，只保留 URL 作为统一下载链接。</div>
+            <div class="result-warning">同一响应同时返回 data:image 和可访问 URL 时，展示 URL，下载优先使用内联数据。</div>
           </div>
 
           <div id="result-grid" class="result-grid"></div>
         </section>
       </main>
+
+      <section class="giscus-comments" aria-labelledby="comments-title">
+        <div class="comments-inner">
+          <div class="comments-heading">
+            <h2 id="comments-title">评论区</h2>
+            <p>生成图片后，欢迎在下方分享提示词和生成的图片，方便其他人复现和交流。</p>
+          </div>
+          <script id="giscus-script"
+                  src="https://giscus.app/client.js"
+                  data-repo="jlu005807/Simple-img-rawer"
+                  data-repo-id="R_kgDOS2l07g"
+                  data-category="Announcements"
+                  data-category-id="DIC_kwDOS2l07s4C-5Pg"
+                  data-mapping="pathname"
+                  data-strict="0"
+                  data-reactions-enabled="1"
+                  data-emit-metadata="0"
+                  data-input-position="top"
+                  data-theme="light"
+                  data-lang="zh-CN"
+                  data-loading="lazy"
+                  crossorigin="anonymous"
+                  async>
+          </script>
+        </div>
+      </section>
     </div>
   </body>
 </html>
