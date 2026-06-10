@@ -815,8 +815,8 @@
       triggerDownload(objectUrl, filename)
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch {
-      setStatus('跨域链接无法直接下载，已打开原图', 'error')
-      openActiveOriginal()
+      triggerDirectUrlDownload(active.url, filename)
+      setStatus('已触发浏览器下载；若没有开始下载，说明源站限制了静态页面直接保存', 'error')
     }
   }
 
@@ -827,6 +827,24 @@
     document.body.appendChild(link)
     link.click()
     link.remove()
+  }
+
+  function triggerDirectUrlDownload(url, filename) {
+    const frame = document.createElement('iframe')
+    frame.hidden = true
+    frame.name = `download-${Date.now()}`
+    document.body.appendChild(frame)
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.target = frame.name
+    link.rel = 'noopener'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    window.setTimeout(() => frame.remove(), 60000)
   }
 
   function clearStoredLinks() {

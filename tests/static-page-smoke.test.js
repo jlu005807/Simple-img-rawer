@@ -42,3 +42,10 @@ test('entry exposes dark mode and no visible countdown copy', () => {
   assert.doesNotMatch(html, /倒计时|一小时/)
   assert.doesNotMatch(app, /timeLeftLabel/)
 })
+
+test('download fallback does not open the original image', () => {
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.doesNotMatch(app, /catch\s*\{\s*setStatus\([^)]*\)\s*openActiveOriginal\(\)/)
+  assert.match(app, /triggerDirectUrlDownload\(active\.url,\s*filename\)/)
+})
