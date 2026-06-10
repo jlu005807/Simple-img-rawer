@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Local environment
+.env
+.env.*
+
+# Build output
+dist/
+build/
+
+# Runtime and logs
+*.log
+*.tmp
+
+# Local browser smoke screenshots
+edge-smoke.png
+layout-smoke.png
+
+# OS and editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
