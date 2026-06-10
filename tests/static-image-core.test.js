@@ -56,6 +56,26 @@ test('prefers one provider URL when the same response item also includes b64 dat
   )
 })
 
+test('pairs provider URL previews with inline data downloads', () => {
+  assert.deepEqual(
+    core.extractImageResults({
+      output_format: 'webp',
+      data: [
+        {
+          b64_json: 'same-image-inline-copy',
+          url: 'https://aiapi1.cc.cd/generated/result.png',
+        },
+      ],
+    }),
+    [
+      {
+        url: 'https://aiapi1.cc.cd/generated/result.png',
+        downloadUrl: 'data:image/webp;base64,same-image-inline-copy',
+      },
+    ],
+  )
+})
+
 test('uses upstream expiry when present and otherwise falls back to one hour', () => {
   const now = Date.parse('2026-06-10T10:00:00.000Z')
   assert.equal(core.resolveExpiresAt('2026-06-10T11:30:00.000Z', now), '2026-06-10T11:30:00.000Z')
@@ -68,7 +88,14 @@ test('does not persist inline image data in saved result links', () => {
   assert.deepEqual(
     core.persistableResultImages([
       { url: 'data:image/png;base64,abc', nodeName: 'A', protocol: 'openai', createdAt, expiresAt },
-      { url: 'https://cdn.example.com/result.png', nodeName: 'A', protocol: 'openai', createdAt, expiresAt },
+      {
+        url: 'https://cdn.example.com/result.png',
+        downloadUrl: 'data:image/png;base64,abc',
+        nodeName: 'A',
+        protocol: 'openai',
+        createdAt,
+        expiresAt,
+      },
     ]),
     [{ url: 'https://cdn.example.com/result.png', nodeName: 'A', protocol: 'openai', createdAt, expiresAt }],
   )

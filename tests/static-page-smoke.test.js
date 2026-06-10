@@ -47,5 +47,13 @@ test('download fallback does not open the original image', () => {
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
 
   assert.doesNotMatch(app, /catch\s*\{\s*setStatus\([^)]*\)\s*openActiveOriginal\(\)/)
-  assert.match(app, /triggerDirectUrlDownload\(active\.url,\s*filename\)/)
+  assert.match(app, /triggerDirectUrlDownload\(downloadUrl,\s*filename\)/)
+})
+
+test('download prefers inline data when the result has a separate download URL', () => {
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(app, /downloadUrl\s*=\s*active\.downloadUrl\s*\|\|\s*active\.url/)
+  assert.match(app, /downloadUrl\.startsWith\('data:image\/'\)/)
+  assert.match(app, /triggerDownload\(downloadUrl,\s*filename\)/)
 })

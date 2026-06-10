@@ -117,13 +117,31 @@
     }
   }
 
-  function extractImageUrls(payload) {
-    const urls = []
-    const seen = new Set()
+  function extractImageResults(payload) {
+    const images = []
+    const seen = new Map()
     const responseDefaultFormat =
       payload && typeof payload === 'object' && !Array.isArray(payload) ? payload.output_format : undefined
 
-    function add(value, trustedHttp) {
+    function pushImage(url, downloadUrl) {
+      if (!url || seen.has(url)) {
+        if (downloadUrl && seen.has(url)) {
+          const existing = images[seen.get(url)]
+          if (!existing.downloadUrl) {
+            existing.downloadUrl = downloadUrl
+          }
+        }
+        return
+      }
+      const image = { url }
+      if (downloadUrl && downloadUrl !== url) {
+        image.downloadUrl = downloadUrl
+      }
+      seen.set(url, images.length)
+      images.push(image)
+    }
+
+    function add(value, trustedHttp, downloadUrl) {
       if (typeof value !== 'string') {
         return
       }
@@ -132,17 +150,11 @@
         return
       }
       if (text.startsWith('data:image/') && text.includes(';base64,')) {
-        if (!seen.has(text)) {
-          seen.add(text)
-          urls.push(text)
-        }
+        pushImage(text, downloadUrl)
         return
       }
       if (/^https?:\/\//i.test(text) && (trustedHttp || looksLikeImageUrl(text))) {
-        if (!seen.has(text)) {
-          seen.add(text)
-          urls.push(text)
-        }
+        pushImage(text, downloadUrl)
         return
       }
       for (const match of String(value).matchAll(IMAGE_URL_RE)) {
@@ -165,10 +177,14 @@
       }
 
       const localFormat = value.output_format || inheritedFormat || responseDefaultFormat || 'png'
+      const inlineUrl =
+        typeof value.b64_json === 'string' && value.b64_json.trim()
+          ? toDataImageUrl(value.b64_json, localFormat)
+          : ''
       if (typeof value.url === 'string') {
-        add(value.url, true)
-      } else if (typeof value.b64_json === 'string' && value.b64_json.trim()) {
-        add(toDataImageUrl(value.b64_json, localFormat), true)
+        add(value.url, true, inlineUrl)
+      } else if (inlineUrl) {
+        add(inlineUrl, true)
       }
 
       const keys = [
@@ -191,7 +207,11 @@
     }
 
     visit(payload, '', responseDefaultFormat)
-    return urls
+    return images
+  }
+
+  function extractImageUrls(payload) {
+    return extractImageResults(payload).map((image) => image.url)
   }
 
   function unwrapResponseDataObject(data) {
@@ -326,6 +346,7 @@
     ONE_HOUR_MS,
     asyncBaseUrl,
     createId,
+    extractImageResults,
     extractImageUrls,
     maskKey,
     normalizeNode,

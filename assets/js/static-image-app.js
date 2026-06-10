@@ -270,9 +270,10 @@
     try {
       const result = await runWithFallback(enabledNodes, payload, state.references, state.abortController.signal)
       const createdAt = new Date().toISOString()
-      const resultItems = result.urls.map((url, index) => ({
+      const resultItems = result.images.map((image, index) => ({
         id: core.createId('result'),
-        url,
+        url: image.url,
+        downloadUrl: image.downloadUrl || '',
         nodeName: result.node.name,
         nodeId: result.node.id,
         protocol: result.protocol,
@@ -286,7 +287,7 @@
       saveLinks()
       renderResults()
       const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
-      setStatus(`生成完成：${result.urls.length} 张图片，耗时 ${seconds}s。链接过期后会自动清理。`, 'ok')
+      setStatus(`生成完成：${result.images.length} 张图片，耗时 ${seconds}s。链接过期后会自动清理。`, 'ok')
     } catch (error) {
       if (state.abortController && state.abortController.signal.aborted) {
         setStatus('已停止当前生成', 'idle')
@@ -500,12 +501,14 @@
   function finalizeProviderData(data, requestUrl) {
     const payload = normalizeProviderEnvelope(data)
     const unwrapped = core.unwrapResponseDataObject(payload)
+    const images = core.extractImageResults(payload)
     const expiresAt =
       (payload && (payload.expires_at || payload.expiresAt)) ||
       (unwrapped && (unwrapped.expires_at || unwrapped.expiresAt)) ||
       null
     return {
-      urls: core.extractImageUrls(payload),
+      images,
+      urls: images.map((image) => image.url),
       expiresAt,
       requestUrl,
     }
@@ -800,13 +803,14 @@
     if (!active) {
       return
     }
-    const filename = `generated-${new Date().toISOString().replace(/[:.]/g, '-')}.${extensionForUrl(active.url)}`
-    if (active.url.startsWith('data:image/')) {
-      triggerDownload(active.url, filename)
+    const downloadUrl = active.downloadUrl || active.url
+    const filename = `generated-${new Date().toISOString().replace(/[:.]/g, '-')}.${extensionForUrl(downloadUrl)}`
+    if (downloadUrl.startsWith('data:image/')) {
+      triggerDownload(downloadUrl, filename)
       return
     }
     try {
-      const response = await fetch(active.url)
+      const response = await fetch(downloadUrl)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
@@ -815,7 +819,7 @@
       triggerDownload(objectUrl, filename)
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
     } catch {
-      triggerDirectUrlDownload(active.url, filename)
+      triggerDirectUrlDownload(downloadUrl, filename)
       setStatus('已触发浏览器下载；若没有开始下载，说明源站限制了静态页面直接保存', 'error')
     }
   }
@@ -997,6 +1001,9 @@
   }
 
   function resultBadgeLabel(item) {
+    if (String(item.downloadUrl || '').startsWith('data:image/') && !String(item.url || '').startsWith('data:image/')) {
+      return '链接+内联'
+    }
     return String(item.url || '').startsWith('data:image/') ? '内联' : '链接'
   }
 
