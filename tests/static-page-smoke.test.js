@@ -78,10 +78,15 @@ test('entry embeds giscus comments and syncs the comment theme', () => {
 
 test('async provider follows the documented fnuu polling and image upload contract', () => {
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
 
   assert.doesNotMatch(app, /\/async\/task\//)
   assert.match(app, /core\.resolveAsyncPollUrl\(node\.base_url,\s*taskId,\s*submitObject\.poll_url\)/)
   assert.match(app, /const hasReferences = references\.length > 0/)
   assert.match(app, /body\.append\('image',\s*item\.file/)
   assert.match(app, /headers: authHeaders\(node,\s*!hasReferences\)/)
+  assert.match(readme, /GitHub Pages 与 CORS/)
+  assert.match(readme, /Access-Control-Allow-Origin/)
+  assert.match(readme, /OPTIONS \/async\/images/)
+  assert.match(readme, /https:\/\/fnuu\.net\/async\/images/)
 })

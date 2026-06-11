@@ -39,7 +39,7 @@
 Base URL 根据协议有不同含义：
 
 - `OpenAI` / `自动`：填写接口根地址，例如 `https://api.example.com` 或 `https://api.example.com/v1`。
-- `异步`：提交到 `/async/images`，轮询异步任务结果。
+- `异步`：填写异步中转根地址，例如 `https://fnuu.net`；如果直接填写文档里的 `https://fnuu.net/async/images`，页面也会自动归一化，避免重复拼接路径。
 - `Chat`：提交到 `/v1/chat/completions`。
 - `自定义`：直接向 Base URL 发起请求。
 
@@ -56,6 +56,25 @@ Base URL 根据协议有不同含义：
 - 轮询间隔：4 秒，符合文档建议的 3-5 秒。
 - 节点超时建议：`gpt-image-2` 单张通常需要 1-3 分钟，建议把节点超时设为 180 秒或更高。
 - 完成结果：`status` 为 `completed` 时，从 `urls` 数组读取临时图片直链；`failed` 时显示接口返回的错误原因。
+
+## GitHub Pages 与 CORS
+
+项目可以部署到 GitHub Pages，例如 `https://jlu005807.github.io/Simple-img-rawer/`。但 GitHub Pages 只是静态托管 HTML、CSS 和 JavaScript，不会把 API 请求转发成同源请求，也不能替第三方接口补 CORS 头。
+
+在 Pages 上调用异步中转时，浏览器实际会从来源 `https://jlu005807.github.io` 请求 `https://fnuu.net`。因为请求带有 `Authorization`，并且文生图使用 `Content-Type: application/json`，浏览器会先发送 `OPTIONS` 预检。异步中转服务端需要支持：
+
+```http
+Access-Control-Allow-Origin: https://jlu005807.github.io
+Access-Control-Allow-Methods: GET, POST, OPTIONS
+Access-Control-Allow-Headers: Authorization, Content-Type, Accept
+```
+
+如果生成一点击就失败，通常按下面顺序排查：
+
+1. 打开浏览器 DevTools 的 Network，查看是否有 `OPTIONS /async/images`。
+2. 如果 `OPTIONS` 是 `405`、没有 `Access-Control-Allow-Origin`，或 Console 出现 CORS preflight 错误，这是中转服务端未开放浏览器跨域；静态页面无法绕过，需要中转服务端修 CORS，或自己部署一个后端代理。
+3. 如果 `POST /async/images` 成功返回 `task_id`，但后续 `GET /async/images/{task_id}` 失败，再看轮询响应里的 `status` 和 `error`。
+4. 如果接口返回 `failed`，这是上游任务失败、Key/余额/参数问题或模型失败，不是 GitHub Pages 本身的问题。
 
 ## 下载策略
 

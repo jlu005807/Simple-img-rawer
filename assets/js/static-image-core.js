@@ -52,9 +52,12 @@
   }
 
   function asyncBaseUrl(baseUrl) {
-    const base = trimTrailingSlash(baseUrl)
+    let base = trimTrailingSlash(baseUrl)
+    if (base.toLowerCase().endsWith('/async/images')) {
+      base = trimTrailingSlash(base.slice(0, -'/async/images'.length))
+    }
     if (base.toLowerCase().endsWith('/v1')) {
-      return trimTrailingSlash(base.slice(0, -3))
+      base = trimTrailingSlash(base.slice(0, -3))
     }
     return base
   }

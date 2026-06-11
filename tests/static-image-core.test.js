@@ -10,6 +10,21 @@ test('builds provider endpoints without duplicating /v1', () => {
   assert.equal(core.requestUrlFor({ base_url: 'https://custom.example.com/path', api_type: 'custom' }, 'custom'), 'https://custom.example.com/path')
 })
 
+test('accepts documented async submit endpoints as node base URLs', () => {
+  assert.equal(
+    core.requestUrlFor({ base_url: 'https://fnuu.net/async/images', api_type: 'async' }, 'async'),
+    'https://fnuu.net/async/images',
+  )
+  assert.equal(
+    core.requestUrlFor({ base_url: 'https://fnuu.net/async/images/', api_type: 'async' }, 'async'),
+    'https://fnuu.net/async/images',
+  )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net/async/images', '47528f39a8644bdfae66dc0bb1f430dd', ''),
+    'https://fnuu.net/async/images/47528f39a8644bdfae66dc0bb1f430dd',
+  )
+})
+
 test('resolves documented async image polling URLs', () => {
   assert.equal(
     core.resolveAsyncPollUrl('https://fnuu.net', '47528f39a8644bdfae66dc0bb1f430dd', '/async/images/47528f39a8644bdfae66dc0bb1f430dd'),
