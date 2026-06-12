@@ -266,10 +266,11 @@
     return (Array.isArray(images) ? images : [])
       .filter((item) => {
         const url = String((item && item.url) || '').trim()
-        return url && !url.startsWith('data:image/')
+        return Boolean(url)
       })
       .map((item) => ({
         url: String(item.url).trim(),
+        downloadUrl: String(item.downloadUrl || item.url || '').trim(),
         nodeName: item.nodeName || '',
         protocol: item.protocol || '',
         createdAt: item.createdAt || '',

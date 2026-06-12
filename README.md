@@ -81,6 +81,7 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 浏览器对跨域图片下载有限制：
 
 - 远程图片能显示，不代表前端能读取它。
+- 远程图片直链也可能直接返回 `403 Forbidden`，这时不能作为 `<img src>` 预览源。
 - 如果源站没有开启 CORS，`fetch(url)` 不能拿到图片 blob。
 - 对跨域 URL 使用 `<a download>` 时，浏览器也可能忽略下载并打开原图。
 
@@ -91,7 +92,7 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 3. 如果只有远程 URL，先尝试 `fetch -> blob -> download`。
 4. 如果远程 URL 受跨域限制，则触发浏览器直接下载兜底；源站不允许时，静态页面无法强制保存。
 
-为了避免 localStorage 过大，内联 `data:image` 只保留在当前页面状态里，不会写入持久化结果链接。
+为了避免远程图床 403 导致刷新后无法预览，页面会把 `data:image` 一起写入本地结果记录。浏览器 localStorage 容量有限，如果图片数据太大，页面会自动只保留最近能写入的结果。
 
 ## 项目结构
 

@@ -963,7 +963,18 @@
       ...item,
       id: state.results.find((result) => result.url === item.url)?.id || core.createId('result'),
     }))
-    saveJson(STORAGE_KEYS.links, persistable)
+    for (let limit = persistable.length; limit >= 0; limit -= 1) {
+      try {
+        window.localStorage.setItem(STORAGE_KEYS.links, JSON.stringify(persistable.slice(0, limit)))
+        if (limit < persistable.length) {
+          setStatus('本地存储空间不足，已只保留最近的结果预览', 'error')
+        }
+        return
+      } catch {
+        /* try a smaller set */
+      }
+    }
+    setStatus('浏览器本地存储写入失败', 'error')
   }
 
   function loadJson(key, fallback) {

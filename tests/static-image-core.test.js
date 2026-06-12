@@ -122,7 +122,7 @@ test('uses upstream expiry when present and otherwise falls back to one hour', (
   assert.equal(core.resolveExpiresAt(null, now), '2026-06-10T11:00:00.000Z')
 })
 
-test('does not persist inline image data in saved result links', () => {
+test('persists inline image data so saved results can still preview after reload', () => {
   const createdAt = '2026-06-10T10:00:00.000Z'
   const expiresAt = '2026-06-10T11:00:00.000Z'
   assert.deepEqual(
@@ -137,6 +137,23 @@ test('does not persist inline image data in saved result links', () => {
         expiresAt,
       },
     ]),
-    [{ url: 'https://cdn.example.com/result.png', nodeName: 'A', protocol: 'openai', createdAt, expiresAt }],
+    [
+      {
+        url: 'data:image/png;base64,abc',
+        downloadUrl: 'data:image/png;base64,abc',
+        nodeName: 'A',
+        protocol: 'openai',
+        createdAt,
+        expiresAt,
+      },
+      {
+        url: 'https://cdn.example.com/result.png',
+        downloadUrl: 'data:image/png;base64,abc',
+        nodeName: 'A',
+        protocol: 'openai',
+        createdAt,
+        expiresAt,
+      },
+    ],
   )
 })

@@ -8,8 +8,8 @@ const root = path.resolve(__dirname, '..')
 test('static entry exposes node setup, generation, and result surfaces', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
 
-  assert.match(html, /assets\/js\/static-image-core\.js/)
-  assert.match(html, /assets\/js\/static-image-app\.js/)
+  assert.match(html, /assets\/js\/static-image-core\.js\?v=20260612-preview-data/)
+  assert.match(html, /assets\/js\/static-image-app\.js\?v=20260612-preview-data/)
   assert.match(html, /assets\/css\/styles\.css/)
   assert.match(html, /id="node-form"/)
   assert.match(html, /id="generation-form"/)
@@ -59,10 +59,17 @@ test('download prefers inline data when the result has a separate download URL',
 })
 
 test('result previews prefer inline data when a remote URL is blocked', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
 
+  assert.match(html, /预览和下载优先使用内联数据/)
+  assert.match(html, /static-image-app\.js\?v=20260612-preview-data/)
   assert.match(app, /src="\$\{escapeAttribute\(core\.resultDisplayUrl\(item\)\)\}"/)
   assert.match(app, /elements\.resultPreview\.src\s*=\s*core\.resultDisplayUrl\(active\)/)
+  assert.match(app, /persistable\.slice\(0,\s*limit\)/)
+  assert.match(readme, /403 Forbidden/)
+  assert.match(readme, /localStorage 容量有限/)
 })
 
 test('entry embeds giscus comments and syncs the comment theme', () => {
