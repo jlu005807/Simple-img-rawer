@@ -277,6 +277,14 @@
       }))
   }
 
+  function resultDisplayUrl(item) {
+    const inline = String((item && item.downloadUrl) || '').trim()
+    if (inline.startsWith('data:image/')) {
+      return inline
+    }
+    return String((item && item.url) || '').trim()
+  }
+
   function normalizeNode(raw) {
     const source = raw || {}
     return {
@@ -360,6 +368,7 @@
     requestUrlFor,
     resolveAsyncPollUrl,
     resolveExpiresAt,
+    resultDisplayUrl,
     toDataImageUrl,
     unwrapResponseDataObject,
     validateNode,

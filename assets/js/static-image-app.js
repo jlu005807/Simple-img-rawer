@@ -761,7 +761,7 @@
       .map(
         (item) => `
           <button type="button" class="result-tile ${item.id === state.activeResultId ? 'active' : ''}" data-result-id="${escapeAttribute(item.id)}">
-            <img src="${escapeAttribute(item.url)}" alt="生成图片">
+            <img src="${escapeAttribute(core.resultDisplayUrl(item))}" alt="生成图片">
             <span>${resultBadgeLabel(item)}</span>
           </button>
         `,
@@ -771,7 +771,7 @@
     if (!active) {
       return
     }
-    elements.resultPreview.src = active.url
+    elements.resultPreview.src = core.resultDisplayUrl(active)
     elements.resultPreview.hidden = false
     elements.resultEmpty.hidden = true
     elements.resultMeta.textContent = `${active.nodeName || '未知节点'} · ${protocolLabel(active.protocol)} · 临时链接`

@@ -10,7 +10,7 @@
 - 参考图上传：本地转为 `data:image` 后随请求发送。
 - 深色模式：自动跟随系统偏好，也可以手动切换。
 - 结果自动清理：过期链接会在渲染时从本地状态移除。
-- 下载优先使用内联数据：如果接口同一结果同时返回远程 URL 和 `b64_json`，页面只展示远程 URL，但下载按钮优先使用 `data:image`，避免跨域下载失败。
+- 预览和下载优先使用内联数据：如果接口同一结果同时返回远程 URL 和 `b64_json`，页面保留远程 URL 便于复制，但预览和下载优先使用 `data:image`，避免远程图片 403 或跨域下载失败。
 - giscus 评论区：页面底部可以围绕生成结果讨论，适合分享提示词、参数和生成的图片。
 
 ## 评论区
@@ -76,7 +76,7 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 3. 如果 `POST /async/images` 成功返回 `task_id`，但后续 `GET /async/images/{task_id}` 失败，再看轮询响应里的 `status` 和 `error`。
 4. 如果接口返回 `failed`，这是上游任务失败、Key/余额/参数问题或模型失败，不是 GitHub Pages 本身的问题。
 
-## 下载策略
+## 预览与下载策略
 
 浏览器对跨域图片下载有限制：
 
@@ -86,8 +86,8 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 
 因此项目采用以下顺序：
 
-1. 如果结果本身是 `data:image`，直接下载。
-2. 如果同一响应项同时有 `url` 和 `b64_json`，展示 `url`，下载使用由 `b64_json` 生成的 `data:image`。
+1. 如果结果本身是 `data:image`，直接预览和下载。
+2. 如果同一响应项同时有 `url` 和 `b64_json`，链接栏保留 `url`，预览和下载使用由 `b64_json` 生成的 `data:image`。
 3. 如果只有远程 URL，先尝试 `fetch -> blob -> download`。
 4. 如果远程 URL 受跨域限制，则触发浏览器直接下载兜底；源站不允许时，静态页面无法强制保存。
 

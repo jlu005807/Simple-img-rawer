@@ -102,6 +102,20 @@ test('pairs provider URL previews with inline data downloads', () => {
   )
 })
 
+test('prefers inline image data as the display source when a remote URL may reject embedding', () => {
+  assert.equal(
+    core.resultDisplayUrl({
+      url: 'http://image.aiapi1.cc.cd/images/2026/06/12/result.png',
+      downloadUrl: 'data:image/png;base64,preview-copy',
+    }),
+    'data:image/png;base64,preview-copy',
+  )
+  assert.equal(
+    core.resultDisplayUrl({ url: 'https://cdn.example.com/result.png', downloadUrl: '' }),
+    'https://cdn.example.com/result.png',
+  )
+})
+
 test('uses upstream expiry when present and otherwise falls back to one hour', () => {
   const now = Date.parse('2026-06-10T10:00:00.000Z')
   assert.equal(core.resolveExpiresAt('2026-06-10T11:30:00.000Z', now), '2026-06-10T11:30:00.000Z')

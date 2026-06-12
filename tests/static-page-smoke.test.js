@@ -58,6 +58,13 @@ test('download prefers inline data when the result has a separate download URL',
   assert.match(app, /triggerDownload\(downloadUrl,\s*filename\)/)
 })
 
+test('result previews prefer inline data when a remote URL is blocked', () => {
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(app, /src="\$\{escapeAttribute\(core\.resultDisplayUrl\(item\)\)\}"/)
+  assert.match(app, /elements\.resultPreview\.src\s*=\s*core\.resultDisplayUrl\(active\)/)
+})
+
 test('entry embeds giscus comments and syncs the comment theme', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
