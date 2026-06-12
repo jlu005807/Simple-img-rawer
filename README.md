@@ -115,6 +115,13 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 项目使用 Node.js 内置测试运行器：
 
 ```bash
+npm test
+npm run check
+```
+
+也可以直接运行底层命令：
+
+```bash
 node --test tests/static-image-core.test.js tests/static-page-smoke.test.js
 node --check assets/js/static-image-core.js
 node --check assets/js/static-image-app.js

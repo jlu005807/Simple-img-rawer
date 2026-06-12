@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, '..')
 
 test('static entry exposes node setup, generation, and result surfaces', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 
   assert.match(html, /assets\/js\/static-image-core\.js\?v=20260612-preview-data/)
   assert.match(html, /assets\/js\/static-image-app\.js\?v=20260612-preview-data/)
@@ -18,6 +19,8 @@ test('static entry exposes node setup, generation, and result surfaces', () => {
   assert.match(html, /href="https:\/\/github\.com\/jlu005807\/Simple-img-rawer"/)
   assert.match(html, /aria-label="打开 GitHub 仓库"/)
   assert.doesNotMatch(html, /\/api\/generate/)
+  assert.equal(pkg.scripts.test, 'node --test tests/static-image-core.test.js tests/static-page-smoke.test.js')
+  assert.equal(pkg.scripts.check, 'node --check assets/js/static-image-core.js && node --check assets/js/static-image-app.js')
 })
 
 test('layout uses three columns with result display on the right', () => {
@@ -43,7 +46,17 @@ test('entry exposes dark mode and no visible countdown copy', () => {
   assert.match(css, /\[data-theme="dark"\]/)
   assert.match(app, /theme-toggle/)
   assert.doesNotMatch(html, /倒计时|一小时/)
+  assert.doesNotMatch(html, /图片不做持久化/)
   assert.doesNotMatch(app, /timeLeftLabel/)
+})
+
+test('css references only defined theme variables', () => {
+  const css = fs.readFileSync(path.join(root, 'assets', 'css', 'styles.css'), 'utf8')
+  const defined = new Set([...css.matchAll(/--([a-z0-9-]+)\s*:/gi)].map((match) => match[1]))
+  const referenced = [...css.matchAll(/var\(--([a-z0-9-]+)\)/gi)].map((match) => match[1])
+  const missing = referenced.filter((name) => !defined.has(name))
+
+  assert.deepEqual([...new Set(missing)].sort(), [])
 })
 
 test('download fallback does not open the original image', () => {
@@ -88,6 +101,7 @@ test('entry embeds giscus comments and syncs the comment theme', () => {
   assert.match(html, /参数/)
   assert.match(html, /成品图/)
   assert.match(html, /友好发言/)
+  assert.match(html, /href="https:\/\/github\.com\/jlu005807\/Simple-img-rawer\/discussions\/1"[^>]*target="_blank"[^>]*rel="noopener noreferrer"/)
   assert.match(app, /syncGiscusTheme\(theme\)/)
   assert.match(app, /querySelector\('iframe\.giscus-frame'\)/)
   assert.match(app, /postMessage\(\{\s*giscus:\s*\{\s*setConfig:\s*\{\s*theme\s*\}/s)

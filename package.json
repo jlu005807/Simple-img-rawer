@@ -1,0 +1,10 @@
+{
+  "name": "simple-img-rawer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A static multi-node image generation page.",
+  "scripts": {
+    "test": "node --test tests/static-image-core.test.js tests/static-page-smoke.test.js",
+    "check": "node --check assets/js/static-image-core.js && node --check assets/js/static-image-app.js"
+  }
+}

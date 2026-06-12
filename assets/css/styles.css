@@ -171,7 +171,7 @@ code {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--text);
+  color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -185,9 +185,9 @@ code {
 
 .github-link:hover,
 .github-link:focus-visible {
-  color: var(--primary);
-  border-color: var(--primary);
-  background: var(--primary-soft);
+  color: var(--strong);
+  border-color: var(--strong);
+  background: var(--surface-2);
   transform: translateY(-1px);
   outline: none;
 }
@@ -723,6 +723,16 @@ code {
 .comments-heading p {
   margin: 0;
   color: var(--muted);
+}
+
+.comments-heading a {
+  color: var(--strong);
+  font-weight: 700;
+}
+
+.comments-note {
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 @media (max-width: 1180px) {
