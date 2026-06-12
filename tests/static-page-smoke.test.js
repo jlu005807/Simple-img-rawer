@@ -14,6 +14,9 @@ test('static entry exposes node setup, generation, and result surfaces', () => {
   assert.match(html, /id="node-form"/)
   assert.match(html, /id="generation-form"/)
   assert.match(html, /id="result-grid"/)
+  assert.match(html, /class="github-link"/)
+  assert.match(html, /href="https:\/\/github\.com\/jlu005807\/Simple-img-rawer"/)
+  assert.match(html, /aria-label="打开 GitHub 仓库"/)
   assert.doesNotMatch(html, /\/api\/generate/)
 })
 
