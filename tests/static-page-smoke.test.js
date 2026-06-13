@@ -74,6 +74,18 @@ test('download prefers inline data when the result has a separate download URL',
   assert.match(app, /triggerDownload\(downloadUrl,\s*filename\)/)
 })
 
+test('fetch errors are normalized across browser engines', () => {
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(app, /function isNetworkFetchError\(error\)/)
+  assert.match(app, /failed to fetch/)
+  assert.match(app, /load failed/)
+  assert.match(app, /networkerror/)
+  assert.match(app, /network request failed/)
+  assert.match(app, /isNetworkFetchError\(error\)/)
+  assert.match(app, new RegExp('\\u8bf7\\u6c42\\u5931\\u8d25.*CORS'))
+})
+
 test('result previews prefer inline data when a remote URL is blocked', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')

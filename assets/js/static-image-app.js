@@ -591,6 +591,16 @@
     return Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined && value !== ''))
   }
 
+  function isNetworkFetchError(error) {
+    const message = String((error && error.message) || error || '').toLowerCase()
+    return (
+      message.includes('failed to fetch') ||
+      message.includes('load failed') ||
+      message.includes('networkerror') ||
+      message.includes('network request failed')
+    )
+  }
+
   async function fetchWithTimeout(url, options, seconds, parentSignal) {
     const controller = new AbortController()
     let timedOut = false
@@ -616,7 +626,7 @@
       if (timedOut) {
         throw new Error(`请求超时（${Math.round(timeoutMs / 1000)}s）`)
       }
-      if (String(error && error.message).includes('Failed to fetch')) {
+      if (isNetworkFetchError(error)) {
         throw new Error('请求失败，可能是节点未开启 CORS 或网络不可达')
       }
       throw error
