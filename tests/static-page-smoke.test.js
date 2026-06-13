@@ -78,12 +78,19 @@ test('fetch errors are normalized across browser engines', () => {
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
 
   assert.match(app, /function isNetworkFetchError\(error\)/)
+  assert.match(app, /function describeFetchErrorReason\(error\)/)
+  assert.match(app, /function formatNetworkFetchError\(error\)/)
   assert.match(app, /failed to fetch/)
   assert.match(app, /load failed/)
   assert.match(app, /networkerror/)
   assert.match(app, /network request failed/)
+  assert.match(app, /error\.name/)
+  assert.match(app, /error\.message/)
+  assert.match(app, /浏览器原始错误/)
   assert.match(app, /isNetworkFetchError\(error\)/)
+  assert.match(app, /formatNetworkFetchError\(error\)/)
   assert.match(app, new RegExp('\\u8bf7\\u6c42\\u5931\\u8d25.*CORS'))
+  assert.match(app, /\$\{base\}。浏览器原始错误：\$\{reason\}/)
 })
 
 test('result previews prefer inline data when a remote URL is blocked', () => {

@@ -601,6 +601,27 @@
     )
   }
 
+  function describeFetchErrorReason(error) {
+    if (!error || typeof error !== 'object') {
+      return String(error || '').trim()
+    }
+
+    const name = String(error.name || '').trim()
+    const message = String(error.message || '').trim()
+    const detail = name && message && !message.toLowerCase().startsWith(name.toLowerCase())
+      ? `${name}: ${message}`
+      : message || name
+    const code = error.code ? `code=${String(error.code).trim()}` : ''
+    const reason = [detail, code].filter(Boolean).join('，')
+    return reason.slice(0, 240)
+  }
+
+  function formatNetworkFetchError(error) {
+    const reason = describeFetchErrorReason(error)
+    const base = '请求失败，可能是节点未开启 CORS 或网络不可达'
+    return reason ? `${base}。浏览器原始错误：${reason}` : base
+  }
+
   async function fetchWithTimeout(url, options, seconds, parentSignal) {
     const controller = new AbortController()
     let timedOut = false
@@ -627,7 +648,7 @@
         throw new Error(`请求超时（${Math.round(timeoutMs / 1000)}s）`)
       }
       if (isNetworkFetchError(error)) {
-        throw new Error('请求失败，可能是节点未开启 CORS 或网络不可达')
+        throw new Error(formatNetworkFetchError(error))
       }
       throw error
     } finally {
