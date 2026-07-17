@@ -122,6 +122,22 @@ test('uses upstream expiry when present and otherwise falls back to one hour', (
   assert.equal(core.resolveExpiresAt(null, now), '2026-06-10T11:00:00.000Z')
 })
 
+test('keeps result ids through persistence so duplicate urls stay distinct', () => {
+  const shared = {
+    url: 'https://cdn.example.com/same.png',
+    nodeName: 'A',
+    protocol: 'openai',
+    createdAt: '2026-06-10T10:00:00.000Z',
+    expiresAt: '2026-06-10T11:00:00.000Z',
+  }
+  const persisted = core.persistableResultImages([
+    { ...shared, id: 'result-1' },
+    { ...shared, id: 'result-2' },
+  ])
+  assert.deepEqual(persisted.map((item) => item.id), ['result-1', 'result-2'])
+  assert.equal(Object.prototype.hasOwnProperty.call(core.persistableResultImages([shared])[0], 'id'), false)
+})
+
 test('persists inline image data so saved results can still preview after reload', () => {
   const createdAt = '2026-06-10T10:00:00.000Z'
   const expiresAt = '2026-06-10T11:00:00.000Z'

@@ -9,8 +9,8 @@ test('static entry exposes node setup, generation, and result surfaces', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 
-  assert.match(html, /assets\/js\/static-image-core\.js\?v=20260612-preview-data/)
-  assert.match(html, /assets\/js\/static-image-app\.js\?v=20260612-preview-data/)
+  assert.match(html, /assets\/js\/static-image-core\.js\?v=20260717-studio/)
+  assert.match(html, /assets\/js\/static-image-app\.js\?v=20260717-studio/)
   assert.match(html, /assets\/css\/styles\.css/)
   assert.match(html, /id="node-form"/)
   assert.match(html, /id="generation-form"/)
@@ -99,7 +99,7 @@ test('result previews prefer inline data when a remote URL is blocked', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
 
   assert.match(html, /预览和下载优先使用内联数据/)
-  assert.match(html, /static-image-app\.js\?v=20260612-preview-data/)
+  assert.match(html, /static-image-app\.js\?v=20260717-studio/)
   assert.match(app, /src="\$\{escapeAttribute\(core\.resultDisplayUrl\(item\)\)\}"/)
   assert.match(app, /elements\.resultPreview\.src\s*=\s*core\.resultDisplayUrl\(active\)/)
   assert.match(app, /persistable\.slice\(0,\s*limit\)/)
@@ -142,4 +142,93 @@ test('async provider follows the documented fnuu polling and image upload contra
   assert.match(readme, /Access-Control-Allow-Origin/)
   assert.match(readme, /OPTIONS \/async\/images/)
   assert.match(readme, /https:\/\/fnuu\.net\/async\/images/)
+})
+
+test('async polling has a total time budget so stuck tasks stop', () => {
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(app, /ASYNC_POLL_BUDGET_MS/)
+  assert.match(app, /pollDeadline/)
+  assert.match(app, /ASYNC_POLL_INTERVAL_MS/)
+})
+
+test('page head ships favicon, meta description, theme-color, and pre-paint theme script', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+
+  assert.match(html, /<link rel="icon" href="data:image\/svg\+xml/)
+  assert.match(html, /<meta name="description"/)
+  assert.match(html, /<meta name="theme-color"[^>]*prefers-color-scheme: light/)
+  assert.match(html, /<meta name="theme-color"[^>]*prefers-color-scheme: dark/)
+  assert.match(html, /preApplyTheme/)
+  assert.match(html, /simple-img-static\.theme\.v1/)
+  assert.match(html, /<noscript>/)
+})
+
+test('references support individual removal and read failures are surfaced', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(root, 'assets', 'css', 'styles.css'), 'utf8')
+
+  assert.match(app, /data-reference-id/)
+  assert.match(app, /onReferenceRemove/)
+  assert.match(app, /读取参考图失败/)
+  assert.match(css, /\.reference-remove/)
+  assert.match(html, /id="reference-list"/)
+})
+
+test('node action buttons and key toggle expose accessible names', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(html, /id="reveal-key"[^>]*aria-label="显示或隐藏 API Key"/)
+  assert.match(app, /aria-label="上移节点/)
+  assert.match(app, /aria-label="删除节点/)
+  assert.match(html, /id="attempt-list"[^>]*aria-live="polite"/)
+})
+
+test('stopped attempts get a distinct dot color and storage guards against corruption', () => {
+  const css = fs.readFileSync(path.join(root, 'assets', 'css', 'styles.css'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(css, /\.attempt-stopped \.attempt-dot/)
+  assert.match(app, /function loadJsonArray\(key\)/)
+  assert.match(app, /Array\.isArray\(value\) \? value : \[\]/)
+})
+
+test('references accept drag-and-drop and clipboard paste', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(root, 'assets', 'css', 'styles.css'), 'utf8')
+
+  assert.match(html, /id="reference-dropzone"/)
+  assert.match(html, /拖拽图片到此处/)
+  assert.match(app, /function bindDropzoneEvents\(\)/)
+  assert.match(app, /addEventListener\('drop'/)
+  assert.match(app, /function onGlobalPaste\(event\)/)
+  assert.match(app, /addReferenceFiles/)
+  assert.match(css, /\.reference-dropzone\.drag-over/)
+})
+
+test('generation exposes a keyboard shortcut and locks references while running', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+
+  assert.match(html, /Ctrl \+ Enter 快速生成/)
+  assert.match(app, /function onGlobalKeydown\(event\)/)
+  assert.match(app, /requestSubmit\(\)/)
+  assert.match(app, /生成过程中不能修改参考图/)
+  assert.match(app, /elements\.referenceInput\.disabled = value/)
+})
+
+test('preview supports click-to-open and the studio look ships display fonts', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
+  const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
+  const css = fs.readFileSync(path.join(root, 'assets', 'css', 'styles.css'), 'utf8')
+
+  assert.match(html, /id="result-preview"[^>]*tabindex="0"/)
+  assert.match(app, /function openPreviewZoom\(\)/)
+  assert.match(css, /--font-display:/)
+  assert.match(css, /\.brand-mark/)
+  assert.match(css, /\.panel-index/)
+  assert.match(css, /prefers-reduced-motion/)
 })

@@ -3,16 +3,38 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="纯静态的多节点 AI 图片生成页面：浏览器直连 API 节点生成图片，配置只保存在本机。">
+    <meta name="theme-color" content="#f3efe6" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d110e" media="(prefers-color-scheme: dark)">
     <title>静态图片生成器</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='18' fill='%23175c4f'/%3E%3Ccircle cx='36' cy='38' r='12' fill='%23f3efe6'/%3E%3Cpath d='M18 82 42 54l14 16 12-14 14 26z' fill='%23f3efe6'/%3E%3C/svg%3E">
+    <script>
+      (function preApplyTheme() {
+        try {
+          var saved = window.localStorage.getItem('simple-img-static.theme.v1')
+          var theme = saved === 'dark' || saved === 'light'
+            ? saved
+            : window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+        } catch (error) {
+          /* keep default light theme */
+        }
+      })()
+    </script>
     <link rel="stylesheet" href="assets/css/styles.css">
-    <script src="assets/js/static-image-core.js?v=20260612-preview-data" defer></script>
-    <script src="assets/js/static-image-app.js?v=20260612-preview-data" defer></script>
+    <script src="assets/js/static-image-core.js?v=20260717-studio" defer></script>
+    <script src="assets/js/static-image-app.js?v=20260717-studio" defer></script>
   </head>
   <body>
+    <noscript>
+      <p style="margin: 16px; padding: 12px; border: 1px solid #b91c1c; border-radius: 8px;">
+        此页面需要启用 JavaScript 才能配置节点并生成图片。
+      </p>
+    </noscript>
     <div class="app-shell">
       <header class="topbar">
         <div class="brand">
-          <h1>静态图片生成器</h1>
+          <h1><span class="brand-mark" aria-hidden="true"></span>静态图片生成器</h1>
           <p>浏览器直连节点生成图片，配置只保存在本机。</p>
         </div>
         <div class="topbar-actions">
@@ -39,7 +61,7 @@
       <main class="workspace three-column">
         <section class="panel node-panel compact-panel" aria-labelledby="node-title">
           <div class="panel-header">
-            <h2 id="node-title">API 节点</h2>
+            <h2 id="node-title"><span class="panel-index" aria-hidden="true">01</span>API 节点</h2>
             <span id="node-count">0/0 启用</span>
           </div>
 
@@ -53,20 +75,20 @@
               </div>
               <div class="field">
                 <label for="node-model">模型</label>
-                <input id="node-model" autocomplete="off" value="gpt-image-2">
+                <input id="node-model" autocomplete="off" spellcheck="false" autocapitalize="off" value="gpt-image-2">
               </div>
             </div>
 
             <div class="field">
               <label for="node-base-url">base_url</label>
-              <input id="node-base-url" autocomplete="off" placeholder="https://api.example.com">
+              <input id="node-base-url" autocomplete="off" spellcheck="false" autocapitalize="off" inputmode="url" placeholder="https://api.example.com">
             </div>
 
             <div class="field">
               <label for="node-api-key">API Key</label>
               <div class="input-with-button">
-                <input id="node-api-key" type="password" autocomplete="off" placeholder="sk-...">
-                <button id="reveal-key" type="button" title="显示或隐藏 Key">◐</button>
+                <input id="node-api-key" type="password" autocomplete="new-password" spellcheck="false" autocapitalize="off" placeholder="sk-...">
+                <button id="reveal-key" type="button" title="显示或隐藏 Key" aria-label="显示或隐藏 API Key">◐</button>
               </div>
               <span class="small-text">Key 仅存于本机浏览器 localStorage。</span>
             </div>
@@ -112,7 +134,7 @@
 
         <section class="panel generation-panel compact-panel" aria-labelledby="generation-title">
           <div class="panel-header">
-            <h2 id="generation-title">提示词与参数</h2>
+            <h2 id="generation-title"><span class="panel-index" aria-hidden="true">02</span>提示词与参数</h2>
             <span>按节点顺序 fallback</span>
           </div>
 
@@ -162,11 +184,15 @@
               </div>
             </div>
 
-            <div id="reference-list" class="reference-list"></div>
+            <div id="reference-dropzone" class="reference-dropzone">
+              <p class="dropzone-hint">拖拽图片到此处，或在页面任意位置 Ctrl+V 粘贴截图</p>
+              <div id="reference-list" class="reference-list"></div>
+            </div>
 
             <div class="run-row">
               <button id="generate" class="primary" type="submit">生成图片</button>
               <button id="stop" class="danger" type="button" disabled>停止</button>
+              <span class="run-hint">Ctrl + Enter 快速生成</span>
             </div>
           </form>
 
@@ -175,21 +201,21 @@
             <span>节点 / 协议 / URL</span>
           </div>
           <div class="form-grid monitor-grid">
-            <ul id="attempt-list" class="attempt-list"></ul>
+            <ul id="attempt-list" class="attempt-list" aria-live="polite"></ul>
           </div>
         </section>
 
         <section class="panel result-panel result-stage" aria-labelledby="result-title">
           <div class="panel-header">
             <div>
-              <h2 id="result-title">结果显示</h2>
+              <h2 id="result-title"><span class="panel-index" aria-hidden="true">03</span>结果显示</h2>
               <span>过期链接会自动清理</span>
             </div>
             <button id="clear-links" class="ghost" type="button">清理链接</button>
           </div>
 
           <div class="preview-wrap">
-            <img id="result-preview" alt="生成图片预览" hidden>
+            <img id="result-preview" alt="生成图片预览" title="点击在新标签页查看原图" tabindex="0" hidden>
             <div id="result-empty" class="result-empty">暂无图片</div>
           </div>
 
@@ -213,7 +239,7 @@
       <section class="giscus-comments" aria-labelledby="comments-title">
         <div class="comments-inner">
           <div class="comments-heading">
-            <h2 id="comments-title">灵感交换区</h2>
+            <h2 id="comments-title"><span class="panel-index" aria-hidden="true">04</span>灵感交换区</h2>
             <p>晒出你的提示词、参数和成品图吧。好图别只藏在硬盘里，翻车现场也很有参考价值；友好发言，互相递灵感。</p>
             <p class="comments-note">
               由于Github Discussions没有开放相应的img上传接口，所以 giscus 评论区无法粘贴图片上传；如果想上传成品图，可以到

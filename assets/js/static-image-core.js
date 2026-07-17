@@ -269,6 +269,7 @@
         return Boolean(url)
       })
       .map((item) => ({
+        ...(item.id ? { id: String(item.id) } : {}),
         url: String(item.url).trim(),
         downloadUrl: String(item.downloadUrl || item.url || '').trim(),
         nodeName: item.nodeName || '',

@@ -11,6 +11,13 @@
     theme: 'simple-img-static.theme.v1',
   }
 
+  const MAX_REFERENCES = 8
+  const ASYNC_POLL_INTERVAL_MS = 4000
+  const ASYNC_POLL_BUDGET_MS = 10 * 60 * 1000
+  const RESULT_REFRESH_MS = 30000
+  const DOWNLOAD_TIMEOUT_SECONDS = 60
+  const IFRAME_CLEANUP_MS = 60000
+
   const state = {
     nodes: [],
     editingNodeId: '',
@@ -67,6 +74,7 @@
       imageCount: document.querySelector('#image-count'),
       referenceInput: document.querySelector('#reference-input'),
       referenceList: document.querySelector('#reference-list'),
+      referenceDropzone: document.querySelector('#reference-dropzone'),
       clearReferences: document.querySelector('#clear-references'),
       generate: document.querySelector('#generate'),
       stop: document.querySelector('#stop'),
@@ -97,7 +105,18 @@
     elements.quality.addEventListener('change', saveDraft)
     elements.imageCount.addEventListener('input', saveDraft)
     elements.referenceInput.addEventListener('change', onReferenceInput)
+    elements.referenceList.addEventListener('click', onReferenceRemove)
     elements.clearReferences.addEventListener('click', clearReferences)
+    bindDropzoneEvents()
+    document.addEventListener('paste', onGlobalPaste)
+    document.addEventListener('keydown', onGlobalKeydown)
+    elements.resultPreview.addEventListener('click', openPreviewZoom)
+    elements.resultPreview.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        openPreviewZoom()
+      }
+    })
     elements.stop.addEventListener('click', stopGeneration)
     elements.resultGrid.addEventListener('click', onResultSelect)
     elements.copyLink.addEventListener('click', copyActiveLink)
@@ -224,20 +243,115 @@
   }
 
   async function onReferenceInput(event) {
-    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith('image/'))
-    for (const file of files) {
-      if (state.references.length >= 8) {
-        setStatus('参考图最多 8 张', 'error')
+    const files = Array.from(event.target.files || [])
+    await addReferenceFiles(files)
+    event.target.value = ''
+  }
+
+  async function addReferenceFiles(files) {
+    const imageFiles = (files || []).filter((file) => file && file.type && file.type.startsWith('image/'))
+    if (!imageFiles.length) {
+      return
+    }
+    if (state.running) {
+      setStatus('生成过程中不能修改参考图', 'error')
+      return
+    }
+    let added = 0
+    for (const file of imageFiles) {
+      if (state.references.length >= MAX_REFERENCES) {
+        setStatus(`参考图最多 ${MAX_REFERENCES} 张`, 'error')
         break
       }
-      const url = await readFileAsDataUrl(file)
-      state.references.push({ id: core.createId('ref'), file, url, name: file.name })
+      try {
+        const url = await readFileAsDataUrl(file)
+        state.references.push({ id: core.createId('ref'), file, url, name: file.name || 'pasted-image.png' })
+        added += 1
+      } catch {
+        setStatus(`读取参考图失败：${file.name}`, 'error')
+      }
     }
-    event.target.value = ''
+    if (added) {
+      setStatus(`已添加 ${added} 张参考图`, 'ok')
+    }
+    renderReferences()
+  }
+
+  function bindDropzoneEvents() {
+    const zone = elements.referenceDropzone
+    if (!zone) {
+      return
+    }
+    let dragDepth = 0
+    zone.addEventListener('dragenter', (event) => {
+      event.preventDefault()
+      dragDepth += 1
+      zone.classList.add('drag-over')
+    })
+    zone.addEventListener('dragover', (event) => {
+      event.preventDefault()
+    })
+    zone.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1)
+      if (!dragDepth) {
+        zone.classList.remove('drag-over')
+      }
+    })
+    zone.addEventListener('drop', async (event) => {
+      event.preventDefault()
+      dragDepth = 0
+      zone.classList.remove('drag-over')
+      const files = Array.from((event.dataTransfer && event.dataTransfer.files) || [])
+      await addReferenceFiles(files)
+    })
+  }
+
+  async function onGlobalPaste(event) {
+    const target = event.target
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+      const items = Array.from((event.clipboardData && event.clipboardData.items) || [])
+      if (!items.some((item) => item.kind === 'file' && item.type.startsWith('image/'))) {
+        return
+      }
+    }
+    const files = Array.from((event.clipboardData && event.clipboardData.files) || [])
+    if (files.length) {
+      event.preventDefault()
+      await addReferenceFiles(files)
+    }
+  }
+
+  function onGlobalKeydown(event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      if (!state.running) {
+        event.preventDefault()
+        elements.generationForm.requestSubmit()
+      }
+    }
+  }
+
+  function openPreviewZoom() {
+    const active = activeResult()
+    if (!active) {
+      return
+    }
+    window.open(core.resultDisplayUrl(active), '_blank', 'noopener,noreferrer')
+  }
+
+  function onReferenceRemove(event) {
+    const button = event.target.closest('[data-reference-id]')
+    if (!button || state.running) {
+      return
+    }
+    const id = button.getAttribute('data-reference-id')
+    state.references = state.references.filter((item) => item.id !== id)
     renderReferences()
   }
 
   function clearReferences() {
+    if (state.running) {
+      return
+    }
     state.references = []
     renderReferences()
   }
@@ -467,24 +581,28 @@
     const submitData = await parseProviderResponse(submitResponse, node)
     ensureProviderOk(submitResponse, submitData, node)
     const immediate = finalizeProviderData(submitData, submitUrl)
-    const submitObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(submitData))
-    const submitStatus = String((submitObject && submitObject.status) || '').toLowerCase()
+    const submitObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(submitData)) || {}
+    const submitStatus = String(submitObject.status || '').toLowerCase()
     if (immediate.urls.length && (!submitObject.task_id || submitStatus === 'completed')) {
       return immediate
     }
 
-    const taskId = submitObject && (submitObject.task_id || submitObject.id)
+    const taskId = submitObject.task_id || submitObject.id
     if (!taskId) {
       throw new Error('异步节点未返回 task_id')
     }
     const pollUrl = core.resolveAsyncPollUrl(node.base_url, taskId, submitObject.poll_url)
 
+    const pollDeadline = Date.now() + ASYNC_POLL_BUDGET_MS
     let pollCount = 0
     while (true) {
       throwIfAborted(signal)
+      if (Date.now() > pollDeadline) {
+        throw new Error(`异步任务超过 ${Math.round(ASYNC_POLL_BUDGET_MS / 60000)} 分钟仍未完成，已停止轮询`)
+      }
       pollCount += 1
       setStatus(`异步任务处理中：${node.name}，轮询 ${pollCount} 次`, 'running')
-      await sleep(4000, signal)
+      await sleep(ASYNC_POLL_INTERVAL_MS, signal)
       const pollResponse = await fetchWithTimeout(
         pollUrl,
         { method: 'GET', headers: authHeaders(node, false) },
@@ -669,6 +787,11 @@
     state.running = value
     elements.generate.disabled = value
     elements.stop.disabled = !value
+    elements.referenceInput.disabled = value
+    elements.clearReferences.disabled = value || state.references.length === 0
+    elements.referenceList.querySelectorAll('button').forEach((control) => {
+      control.disabled = value
+    })
     elements.nodeForm.querySelectorAll('input, select, button').forEach((control) => {
       if (control !== elements.resetNode && control !== elements.revealKey) {
         control.disabled = value
@@ -737,11 +860,11 @@
               </div>
             </div>
             <div class="node-actions">
-              <button type="button" title="上移" data-node-action="up" data-node-id="${escapeHtml(node.id)}">↑</button>
-              <button type="button" title="下移" data-node-action="down" data-node-id="${escapeHtml(node.id)}">↓</button>
-              <button type="button" title="${node.status ? '禁用' : '启用'}" data-node-action="toggle" data-node-id="${escapeHtml(node.id)}">${node.status ? '●' : '○'}</button>
-              <button type="button" title="编辑" data-node-action="edit" data-node-id="${escapeHtml(node.id)}">✎</button>
-              <button type="button" title="删除" data-node-action="delete" data-node-id="${escapeHtml(node.id)}">×</button>
+              <button type="button" title="上移" aria-label="上移节点 ${escapeAttribute(node.name)}" data-node-action="up" data-node-id="${escapeHtml(node.id)}">↑</button>
+              <button type="button" title="下移" aria-label="下移节点 ${escapeAttribute(node.name)}" data-node-action="down" data-node-id="${escapeHtml(node.id)}">↓</button>
+              <button type="button" title="${node.status ? '禁用' : '启用'}" aria-label="${node.status ? '禁用' : '启用'}节点 ${escapeAttribute(node.name)}" data-node-action="toggle" data-node-id="${escapeHtml(node.id)}">${node.status ? '●' : '○'}</button>
+              <button type="button" title="编辑" aria-label="编辑节点 ${escapeAttribute(node.name)}" data-node-action="edit" data-node-id="${escapeHtml(node.id)}">✎</button>
+              <button type="button" title="删除" aria-label="删除节点 ${escapeAttribute(node.name)}" data-node-action="delete" data-node-id="${escapeHtml(node.id)}">×</button>
             </div>
           </li>
         `,
@@ -750,17 +873,18 @@
   }
 
   function renderReferences() {
-    elements.clearReferences.disabled = state.references.length === 0
+    elements.clearReferences.disabled = state.running || state.references.length === 0
     if (!state.references.length) {
-      elements.referenceList.innerHTML = '<div class="reference-empty">未选择参考图</div>'
+      elements.referenceList.innerHTML = ''
       return
     }
     elements.referenceList.innerHTML = state.references
       .map(
         (item, index) => `
-          <figure class="reference-thumb">
+          <figure class="reference-thumb" style="animation-delay: ${Math.min(index * 40, 240)}ms">
             <img src="${escapeAttribute(item.url)}" alt="${escapeAttribute(item.name)}">
             <figcaption>${index + 1}</figcaption>
+            <button type="button" class="reference-remove" data-reference-id="${escapeAttribute(item.id)}" aria-label="移除参考图 ${escapeAttribute(item.name)}" title="移除">×</button>
           </figure>
         `,
       )
@@ -782,7 +906,6 @@
       elements.resultMeta.textContent = '无结果'
       elements.resultLink.value = ''
       elements.resultActions.hidden = true
-      saveLinks()
       return
     }
     if (!state.results.some((item) => item.id === state.activeResultId)) {
@@ -829,8 +952,8 @@
       setStatus('链接已复制', 'ok')
     } catch {
       elements.resultLink.select()
-      document.execCommand('copy')
-      setStatus('链接已复制', 'ok')
+      const copied = document.execCommand('copy')
+      setStatus(copied ? '链接已复制' : '复制失败，请手动选择链接复制', copied ? 'ok' : 'error')
     }
   }
 
@@ -854,7 +977,7 @@
       return
     }
     try {
-      const response = await fetch(downloadUrl)
+      const response = await fetchWithTimeout(downloadUrl, { method: 'GET' }, DOWNLOAD_TIMEOUT_SECONDS, null)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
@@ -892,7 +1015,7 @@
     link.click()
     link.remove()
 
-    window.setTimeout(() => frame.remove(), 60000)
+    window.setTimeout(() => frame.remove(), IFRAME_CLEANUP_MS)
   }
 
   function clearStoredLinks() {
@@ -973,7 +1096,7 @@
   }
 
   function loadNodes() {
-    return loadJson(STORAGE_KEYS.nodes, []).map((item) => core.normalizeNode(item))
+    return loadJsonArray(STORAGE_KEYS.nodes).map((item) => core.normalizeNode(item))
   }
 
   function saveNodes() {
@@ -981,7 +1104,7 @@
   }
 
   function loadSavedLinks() {
-    return loadJson(STORAGE_KEYS.links, [])
+    return loadJsonArray(STORAGE_KEYS.links)
       .filter((item) => item && item.url && !isExpired(item))
       .map((item) => ({
         ...item,
@@ -992,7 +1115,7 @@
   function saveLinks() {
     const persistable = core.persistableResultImages(state.results).map((item) => ({
       ...item,
-      id: state.results.find((result) => result.url === item.url)?.id || core.createId('result'),
+      id: item.id || core.createId('result'),
     }))
     for (let limit = persistable.length; limit >= 0; limit -= 1) {
       try {
@@ -1017,6 +1140,11 @@
     }
   }
 
+  function loadJsonArray(key) {
+    const value = loadJson(key, [])
+    return Array.isArray(value) ? value : []
+  }
+
   function saveJson(key, value) {
     try {
       window.localStorage.setItem(key, JSON.stringify(value))
@@ -1034,16 +1162,21 @@
     if (clockTimer) {
       return
     }
-    clockTimer = window.setInterval(renderResults, 30000)
+    clockTimer = window.setInterval(renderResults, RESULT_REFRESH_MS)
   }
 
   function sleep(ms, signal) {
     return new Promise((resolve, reject) => {
-      const id = window.setTimeout(resolve, ms)
       const onAbort = () => {
         window.clearTimeout(id)
         reject(new Error('已停止'))
       }
+      const id = window.setTimeout(() => {
+        if (signal) {
+          signal.removeEventListener('abort', onAbort)
+        }
+        resolve()
+      }, ms)
       if (signal) {
         if (signal.aborted) {
           onAbort()
