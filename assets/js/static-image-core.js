@@ -144,25 +144,32 @@
       images.push(image)
     }
 
-    function add(value, trustedHttp, downloadUrl) {
+    function add(value, trustedHttp, downloadUrl, fromScan) {
       if (typeof value !== 'string') {
-        return
+        return false
       }
       const text = value.trim().replace(/[.,;:\]}]+$/, '')
       if (!text) {
-        return
+        return false
       }
       if (text.startsWith('data:image/') && text.includes(';base64,')) {
         pushImage(text, downloadUrl)
-        return
+        return true
       }
       if (/^https?:\/\//i.test(text) && (trustedHttp || looksLikeImageUrl(text))) {
         pushImage(text, downloadUrl)
-        return
+        return true
       }
+      if (fromScan) {
+        return false
+      }
+      let found = false
       for (const match of String(value).matchAll(IMAGE_URL_RE)) {
-        add(match[0], false)
+        if (add(match[0], false, undefined, true)) {
+          found = true
+        }
       }
+      return found
     }
 
     function visit(value, key, inheritedFormat) {
@@ -184,8 +191,10 @@
         typeof value.b64_json === 'string' && value.b64_json.trim()
           ? toDataImageUrl(value.b64_json, localFormat)
           : ''
-      if (typeof value.url === 'string') {
-        add(value.url, true, inlineUrl)
+      if (typeof value.url === 'string' && value.url.trim()) {
+        if (!add(value.url, true, inlineUrl) && inlineUrl) {
+          add(inlineUrl, true)
+        }
       } else if (inlineUrl) {
         add(inlineUrl, true)
       }
@@ -249,12 +258,14 @@
   function resolveExpiresAt(upstreamExpiresAt, now) {
     if (upstreamExpiresAt !== null && upstreamExpiresAt !== undefined && upstreamExpiresAt !== '') {
       let parsed
-      if (typeof upstreamExpiresAt === 'number') {
-        parsed = upstreamExpiresAt < 100000000000 ? upstreamExpiresAt * 1000 : upstreamExpiresAt
+      const text = String(upstreamExpiresAt).trim()
+      if (typeof upstreamExpiresAt === 'number' || /^\d+$/.test(text)) {
+        const numeric = typeof upstreamExpiresAt === 'number' ? upstreamExpiresAt : Number(text)
+        parsed = numeric < 100000000000 ? numeric * 1000 : numeric
       } else {
-        parsed = Date.parse(String(upstreamExpiresAt))
+        parsed = Date.parse(text)
       }
-      if (Number.isFinite(parsed) && parsed > 0) {
+      if (Number.isFinite(parsed) && parsed > 0 && parsed <= 8640000000000000) {
         return new Date(parsed).toISOString()
       }
     }

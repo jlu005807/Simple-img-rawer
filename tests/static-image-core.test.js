@@ -68,6 +68,47 @@ test('extracts generated image links from common provider response shapes', () =
   )
 })
 
+test('ignores plain non-image links in scanned text without crashing', () => {
+  assert.deepEqual(
+    core.extractImageUrls({ choices: [{ message: { content: 'see https://example.com/docs for details' } }] }),
+    [],
+  )
+  assert.deepEqual(
+    core.extractImageUrls({
+      choices: [{ message: { content: 'done https://cdn.example.com/ok.png see https://example.com/docs' } }],
+    }),
+    ['https://cdn.example.com/ok.png'],
+  )
+  assert.deepEqual(core.extractImageUrls({ message: 'inline data:image/svg+xml,<svg/> here' }), [])
+})
+
+test('keeps b64_json images when the response url field is empty or unusable', () => {
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: '', b64_json: 'abc123' }] }), [
+    'data:image/png;base64,abc123',
+  ])
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: '   ', b64_json: 'abc123' }] }), [
+    'data:image/png;base64,abc123',
+  ])
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: 'pending', b64_json: 'abc123' }] }), [
+    'data:image/png;base64,abc123',
+  ])
+})
+
+test('parses numeric and numeric-string expiry timestamps', () => {
+  const now = Date.parse('2026-06-10T10:00:00.000Z')
+  assert.equal(core.resolveExpiresAt(1765368000, now), new Date(1765368000000).toISOString())
+  assert.equal(core.resolveExpiresAt(1765368000000, now), new Date(1765368000000).toISOString())
+  assert.equal(core.resolveExpiresAt('1765368000', now), new Date(1765368000000).toISOString())
+})
+
+test('falls back to one hour for out-of-range or zero timestamps', () => {
+  const now = Date.parse('2026-06-10T10:00:00.000Z')
+  const fallback = '2026-06-10T11:00:00.000Z'
+  assert.equal(core.resolveExpiresAt('1765368000000000000', now), fallback)
+  assert.equal(core.resolveExpiresAt(99999999999999999999, now), fallback)
+  assert.equal(core.resolveExpiresAt('0', now), fallback)
+})
+
 test('prefers one provider URL when the same response item also includes b64 data', () => {
   assert.deepEqual(
     core.extractImageUrls({
