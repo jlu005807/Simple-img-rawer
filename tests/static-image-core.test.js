@@ -1,4 +1,4 @@
-const test = require('node:test')
+﻿const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const core = require('../assets/js/static-image-core.js')
@@ -91,9 +91,9 @@ test('normalizeNode falls back to sane defaults for dirty stored data', () => {
 
 test('validateNode reports missing fields and passes a complete node', () => {
   assert.deepEqual(core.validateNode({}), [
-    '请填写节点名称',
-    'base_url 必须以 http:// 或 https:// 开头',
-    '请填写 API Key',
+    { field: 'name', message: '请填写节点名称' },
+    { field: 'base_url', message: 'base_url 必须以 http:// 或 https:// 开头' },
+    { field: 'api_key', message: '请填写 API Key' },
   ])
   assert.deepEqual(
     core.validateNode({ name: 'n', base_url: 'https://api.example.com', api_key: 'sk-1', model: 'm' }),
@@ -296,4 +296,47 @@ test('persists inline image data so saved results can still preview after reload
       },
     ],
   )
+})
+
+test('toDataImageUrl falls back to png for non-raster formats like svg', () => {
+  assert.equal(core.toDataImageUrl('abc', 'svg+xml'), 'data:image/png;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'svg'), 'data:image/png;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'image/svg+xml'), 'data:image/png;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'unknown'), 'data:image/png;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'png'), 'data:image/png;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'webp'), 'data:image/webp;base64,abc')
+  assert.equal(core.toDataImageUrl('abc', 'jpeg'), 'data:image/jpeg;base64,abc')
+})
+
+test('extractImageUrls rejects inline svg data URLs', () => {
+  const svgDataUrl = 'data:image/svg+xml;base64,PHN2Zz4='
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: svgDataUrl }] }), [])
+})
+
+test('extractImageUrls still accepts inline raster data URLs', () => {
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: 'data:image/png;base64,abc123' }] }), [
+    'data:image/png;base64,abc123',
+  ])
+  assert.deepEqual(core.extractImageUrls({ data: [{ url: 'data:image/webp;base64,xyz' }] }), [
+    'data:image/webp;base64,xyz',
+  ])
+})
+
+test('validateNode returns structured errors with field names', () => {
+  const errors = core.validateNode({})
+  assert.equal(errors.length, 3)
+  assert.equal(errors[0].field, 'name')
+  assert.equal(errors[0].message, '请填写节点名称')
+  assert.equal(errors[1].field, 'base_url')
+  assert.equal(errors[2].field, 'api_key')
+    assert.deepEqual(core.validateNode({ name: 'n', base_url: 'https://x.example.com', api_key: 'k' }), [])
+})
+
+test('extractImageResults does not stack overflow on deeply nested structures', () => {
+  let nested = { url: 'https://cdn.example.com/deep.png' }
+  for (let i = 0; i < 20; i++) {
+    nested = { data: [nested] }
+  }
+  const result = core.extractImageUrls(nested)
+  assert.deepEqual(result, ['https://cdn.example.com/deep.png'])
 })

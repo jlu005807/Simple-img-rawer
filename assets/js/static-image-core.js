@@ -7,7 +7,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : window, function createStaticImageCore() {
   const KNOWN_ASYNC_RELAY_HOSTS = new Set(['fnuu.net', 'www.fnuu.net'])
   const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff']
-  const IMAGE_URL_RE = /(?:https?:\/\/|data:image\/)[^\s"'<>\\)]+/gi
+  const IMAGE_URL_RE = /(?:https?:\/\/[^\s"'<>\\)]+|data:image\/(?:png|jpeg|jpg|webp|gif|bmp|tiff?)[^\s"'<>\\)]*)/gi
+  const INLINE_IMAGE_FORMATS = new Set(['png', 'jpeg', 'jpg', 'webp', 'gif', 'bmp', 'tif', 'tiff'])
   const ONE_HOUR_MS = 60 * 60 * 1000
 
   const API_TYPE_ALIASES = {
@@ -107,7 +108,10 @@
   }
 
   function toDataImageUrl(base64Value, format) {
-    const fmt = String(format || 'png').trim().toLowerCase().replace(/^image\//, '') || 'png'
+    let fmt = String(format || 'png').trim().toLowerCase().replace(/^image\//, '') || 'png'
+    if (!INLINE_IMAGE_FORMATS.has(fmt)) {
+      fmt = 'png'
+    }
     return `data:image/${fmt};base64,${String(base64Value || '').trim()}`
   }
 
@@ -159,7 +163,7 @@
       if (!text) {
         return false
       }
-      if (text.startsWith('data:image/') && text.includes(';base64,')) {
+      if (isSafeInlineImage(text) && text.includes(';base64,')) {
         pushImage(text, downloadUrl)
         return true
       }
@@ -179,14 +183,27 @@
       return found
     }
 
-    function visit(value, key, inheritedFormat) {
+    function isSafeInlineImage(value) {
+      const match = /^data:image\/([a-z0-9.+-]+)/i.exec(value)
+      if (!match) {
+        return false
+      }
+      const fmt = match[1].toLowerCase().replace(/;.*$/, '')
+      return INLINE_IMAGE_FORMATS.has(fmt)
+    }
+
+    const MAX_VISIT_DEPTH = 50
+    function visit(value, key, inheritedFormat, depth) {
+      if (depth > MAX_VISIT_DEPTH) {
+        return
+      }
       if (typeof value === 'string') {
         const trusted = ['url', 'urls', 'image', 'images', 'result', 'output'].includes(String(key || ''))
         add(value, trusted)
         return
       }
       if (Array.isArray(value)) {
-        value.forEach((item) => visit(item, key, inheritedFormat))
+        value.forEach((item) => visit(item, key, inheritedFormat, depth + 1))
         return
       }
       if (!value || typeof value !== 'object') {
@@ -220,12 +237,12 @@
       ]
       keys.forEach((nestedKey) => {
         if (Object.prototype.hasOwnProperty.call(value, nestedKey)) {
-          visit(value[nestedKey], nestedKey, localFormat)
+          visit(value[nestedKey], nestedKey, localFormat, depth + 1)
         }
       })
     }
 
-    visit(payload, '', responseDefaultFormat)
+    visit(payload, '', responseDefaultFormat, 0)
     return images
   }
 
@@ -335,16 +352,16 @@
     const node = normalizeNode(raw)
     const errors = []
     if (!node.name) {
-      errors.push('请填写节点名称')
+      errors.push({ field: 'name', message: '请填写节点名称' })
     }
     if (!/^https?:\/\//i.test(node.base_url)) {
-      errors.push('base_url 必须以 http:// 或 https:// 开头')
+      errors.push({ field: 'base_url', message: 'base_url 必须以 http:// 或 https:// 开头' })
     }
     if (!node.api_key) {
-      errors.push('请填写 API Key')
+      errors.push({ field: 'api_key', message: '请填写 API Key' })
     }
     if (!node.model) {
-      errors.push('请填写模型名称')
+      errors.push({ field: 'model', message: '请填写模型名称' })
     }
     return errors
   }

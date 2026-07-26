@@ -133,7 +133,7 @@
     const errors = core.validateNode(raw)
     markNodeFormErrors(errors)
     if (errors.length) {
-      setStatus(errors[0], 'error')
+      setStatus(errors[0].message, 'error')
       return
     }
 
@@ -154,14 +154,14 @@
   // 校验错误只出现在右上角状态栏时，表单侧毫无反馈；标记出错字段并聚焦第一个
   function markNodeFormErrors(errors) {
     const fields = [
-      { keyword: '节点名称', element: elements.nodeName },
-      { keyword: 'base_url', element: elements.nodeBaseUrl },
-      { keyword: 'API Key', element: elements.nodeApiKey },
-      { keyword: '模型', element: elements.nodeModel },
+      { field: 'name', element: elements.nodeName },
+      { field: 'base_url', element: elements.nodeBaseUrl },
+      { field: 'api_key', element: elements.nodeApiKey },
+      { field: 'model', element: elements.nodeModel },
     ]
     let focused = false
-    fields.forEach(({ keyword, element }) => {
-      const invalid = errors.some((message) => message.includes(keyword))
+    fields.forEach(({ field, element }) => {
+      const invalid = errors.some((err) => err.field === field)
       if (invalid) {
         element.setAttribute('aria-invalid', 'true')
         if (!focused) {
@@ -715,16 +715,15 @@
       if (status === 'failed') {
         throw new Error(errorMessageFromPayload(pollObject) || '异步任务失败')
       }
+      const finalized = finalizeProviderData(pollData)
       if (status === 'completed') {
-        const completed = finalizeProviderData(pollData)
-        if (!completed.urls.length) {
+        if (!finalized.urls.length) {
           throw new Error('异步任务完成但没有返回图片 URL')
         }
-        return completed
+        return finalized
       }
-      const maybeUrls = finalizeProviderData(pollData)
-      if (maybeUrls.urls.length && !status) {
-        return maybeUrls
+      if (finalized.urls.length && !status) {
+        return finalized
       }
     }
   }
@@ -776,8 +775,9 @@
 
   function ensureProviderOk(response, data, node) {
     const payload = normalizeProviderEnvelope(data)
-    if (!response.ok || (data && data.success === false)) {
-      const message = errorMessageFromPayload(data) || `HTTP ${response.status}`
+    // 先归一化再检查，确保 success:false 的 data 包也会被正确提取错误信息
+    if (!response.ok || (payload && payload.success === false)) {
+      const message = errorMessageFromPayload(payload) || `HTTP ${response.status}`
       throw new Error(`${node.name}: ${message}`)
     }
     const payloadStatus = String((payload && payload.status) || '').toLowerCase()
@@ -937,7 +937,7 @@
           <li class="attempt attempt-${escapeHtml(attempt.status)}">
             <span class="attempt-dot"></span>
             <div class="attempt-main">
-              <strong>${escapeHtml(attempt.nodeName)} · ${protocolLabel(attempt.protocol)}</strong>
+              <strong>${escapeHtml(attempt.nodeName)} · ${escapeHtml(protocolLabel(attempt.protocol))}</strong>
               <span>${escapeHtml(attempt.message || '')}</span>
               <code>${escapeHtml(attempt.requestUrl || '')}</code>
             </div>
@@ -962,7 +962,7 @@
             <div class="node-body">
               <div class="node-title">
                 <strong>${escapeHtml(node.name)}</strong>
-                <span>${protocolLabel(node.api_type)}</span>
+              <span>${escapeHtml(protocolLabel(node.api_type))}</span>
               </div>
               <code>${escapeHtml(node.base_url)}</code>
               <div class="node-meta">
@@ -1031,7 +1031,7 @@
         (item, index) => `
           <button type="button" class="result-tile ${item.id === state.activeResultId ? 'active' : ''}" data-result-id="${escapeAttribute(item.id)}" aria-label="查看第 ${index + 1} 张结果：${escapeAttribute(item.nodeName || '未知节点')}">
             <img src="${escapeAttribute(core.resultDisplayUrl(item))}" alt="生成图片">
-            <span>${resultBadgeLabel(item)}</span>
+            <span>${escapeHtml(resultBadgeLabel(item))}</span>
           </button>
         `,
       )
@@ -1381,7 +1381,11 @@
       return false
     }
     const expiresAt = Date.parse(item && item.expiresAt)
-    return Number.isFinite(expiresAt) && expiresAt <= Date.now()
+    // 远程链接如果没有有效过期时间（损坏/丢失），视为已过期
+    if (!Number.isFinite(expiresAt)) {
+      return true
+    }
+    return expiresAt <= Date.now()
   }
 
   function resultBadgeLabel(item) {
