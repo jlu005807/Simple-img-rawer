@@ -6,7 +6,7 @@
   --surface-2: #ece7da;
   --field-bg: #ffffff;
   --ink: #22271f;
-  --muted: #6f7365;
+  --muted: #62665a;
   --line: #d9d2c0;
   --line-strong: #b9b09a;
   --code: #56604f;
@@ -14,10 +14,10 @@
   --strong-hover: #10473d;
   --strong-ink: #f3efe6;
   --accent: #c94f1e;
-  --amber: #b97f1f;
+  --amber: #8a5e10;
   --warn: #a16207;
   --danger: #a52a2a;
-  --ok: #2f7d3f;
+  --ok: #2b7339;
   --focus: #175c4f;
   --focus-ring: rgba(23, 92, 79, 0.22);
   --notice-bg: #f6ead2;
@@ -497,6 +497,11 @@ code {
   gap: 10px;
 }
 
+input[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .input-with-button {
   display: grid;
   grid-template-columns: 1fr 42px;
@@ -777,8 +782,8 @@ code {
   position: absolute;
   top: 2px;
   right: 2px;
-  width: 20px;
-  min-height: 20px;
+  width: 24px;
+  min-height: 24px;
   padding: 0;
   border-radius: 999px;
   background: var(--badge-bg);
@@ -793,6 +798,13 @@ code {
 .reference-thumb:hover .reference-remove,
 .reference-remove:focus-visible {
   opacity: 1;
+}
+
+/* 触屏没有 hover，移除按钮需要常显才可被发现 */
+@media (hover: none) {
+  .reference-remove {
+    opacity: 1;
+  }
 }
 
 .reference-remove:hover:not(:disabled) {

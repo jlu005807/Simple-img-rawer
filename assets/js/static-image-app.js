@@ -40,6 +40,7 @@
     bindElements()
     bindEvents()
     restoreTheme()
+    mountGiscus()
     state.nodes = loadNodes()
     state.results = loadSavedLinks()
     restoreDraft()
@@ -131,6 +132,7 @@
     event.preventDefault()
     const raw = readNodeForm()
     const errors = core.validateNode(raw)
+    markNodeFormErrors(errors)
     if (errors.length) {
       setStatus(errors[0], 'error')
       return
@@ -148,6 +150,29 @@
     saveNodes()
     resetNodeForm()
     renderNodes()
+  }
+
+  // 校验错误只出现在右上角状态栏时，表单侧毫无反馈；标记出错字段并聚焦第一个
+  function markNodeFormErrors(errors) {
+    const fields = [
+      { keyword: '节点名称', element: elements.nodeName },
+      { keyword: 'base_url', element: elements.nodeBaseUrl },
+      { keyword: 'API Key', element: elements.nodeApiKey },
+      { keyword: '模型', element: elements.nodeModel },
+    ]
+    let focused = false
+    fields.forEach(({ keyword, element }) => {
+      const invalid = errors.some((message) => message.includes(keyword))
+      if (invalid) {
+        element.setAttribute('aria-invalid', 'true')
+        if (!focused) {
+          element.focus()
+          focused = true
+        }
+      } else {
+        element.removeAttribute('aria-invalid')
+      }
+    })
   }
 
   function readNodeForm() {
@@ -428,9 +453,11 @@
     const payload = readGenerationForm()
     if (!payload.prompt) {
       setStatus('请填写提示词', 'error')
+      elements.prompt.setAttribute('aria-invalid', 'true')
       elements.prompt.focus()
       return
     }
+    elements.prompt.removeAttribute('aria-invalid')
     const enabledNodes = state.nodes.filter((node) => node.status)
     if (!enabledNodes.length) {
       setStatus('请先保存并启用至少一个 API 节点', 'error')
@@ -666,15 +693,14 @@
     const pollUrl = core.resolveAsyncPollUrl(node.base_url, taskId, submitObject.poll_url)
 
     const pollDeadline = Date.now() + ASYNC_POLL_BUDGET_MS
-    let pollCount = 0
     let transientFailures = 0
+    // 文案保持不变，避免 aria-live 状态栏每 4 秒向读屏用户重复播报
+    setStatus(`异步任务处理中：${node.name}，约每 ${Math.round(ASYNC_POLL_INTERVAL_MS / 1000)} 秒查询一次`, 'running')
     while (true) {
       throwIfAborted(signal)
       if (Date.now() > pollDeadline) {
         throw new Error(`异步任务超过 ${Math.round(ASYNC_POLL_BUDGET_MS / 60000)} 分钟仍未完成，已停止轮询`)
       }
-      pollCount += 1
-      setStatus(`异步任务处理中：${node.name}，轮询 ${pollCount} 次`, 'running')
       await sleep(ASYNC_POLL_INTERVAL_MS, signal)
       let pollResponse
       let pollData
@@ -1028,8 +1054,8 @@
     }
     elements.resultGrid.innerHTML = state.results
       .map(
-        (item) => `
-          <button type="button" class="result-tile ${item.id === state.activeResultId ? 'active' : ''}" data-result-id="${escapeAttribute(item.id)}">
+        (item, index) => `
+          <button type="button" class="result-tile ${item.id === state.activeResultId ? 'active' : ''}" data-result-id="${escapeAttribute(item.id)}" aria-label="查看第 ${index + 1} 张结果：${escapeAttribute(item.nodeName || '未知节点')}">
             <img src="${escapeAttribute(core.resultDisplayUrl(item))}" alt="生成图片">
             <span>${resultBadgeLabel(item)}</span>
           </button>
@@ -1207,6 +1233,36 @@
     elements.themeToggle.textContent = theme === 'dark' ? '亮色' : '深色'
     elements.themeToggle.setAttribute('aria-pressed', theme === 'dark' ? 'true' : 'false')
     syncGiscusTheme(theme)
+  }
+
+  // 动态注入 giscus，使 data-theme 首次加载即为当前主题（静态标签会让深色用户先看到亮色评论框）
+  function mountGiscus() {
+    const container = document.querySelector('#giscus-container')
+    if (!container || container.querySelector('script')) {
+      return
+    }
+    const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+    const script = document.createElement('script')
+    script.id = 'giscus-script'
+    script.src = 'https://giscus.app/client.js'
+    const attributes = {
+      'data-repo': 'jlu005807/Simple-img-rawer',
+      'data-repo-id': 'R_kgDOS2l07g',
+      'data-category': 'Announcements',
+      'data-category-id': 'DIC_kwDOS2l07s4C-5Pg',
+      'data-mapping': 'pathname',
+      'data-strict': '0',
+      'data-reactions-enabled': '1',
+      'data-emit-metadata': '0',
+      'data-input-position': 'top',
+      'data-theme': theme,
+      'data-lang': 'zh-CN',
+      'data-loading': 'lazy',
+    }
+    Object.entries(attributes).forEach(([name, value]) => script.setAttribute(name, value))
+    script.crossOrigin = 'anonymous'
+    script.async = true
+    container.appendChild(script)
   }
 
   function syncGiscusTheme(value) {

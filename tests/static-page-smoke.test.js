@@ -113,9 +113,11 @@ test('entry embeds giscus comments and syncs the comment theme', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
 
   assert.match(html, /class="giscus-comments"/)
-  assert.match(html, /data-repo="jlu005807\/Simple-img-rawer"/)
-  assert.match(html, /data-category="Announcements"/)
-  assert.match(html, /data-theme="light"/)
+  assert.match(html, /id="giscus-container"/)
+  assert.match(app, /function mountGiscus\(\)/)
+  assert.match(app, /'data-repo': 'jlu005807\/Simple-img-rawer'/)
+  assert.match(app, /'data-category': 'Announcements'/)
+  assert.match(app, /https:\/\/giscus\.app\/client\.js/)
   assert.match(html, /晒出你的提示词/)
   assert.match(html, /参数/)
   assert.match(html, /成品图/)
@@ -183,7 +185,9 @@ test('node action buttons and key toggle expose accessible names', () => {
   assert.match(html, /id="reveal-key"[^>]*aria-label="显示或隐藏 API Key"/)
   assert.match(app, /aria-label="上移节点/)
   assert.match(app, /aria-label="删除节点/)
-  assert.match(html, /id="attempt-list"[^>]*aria-live="polite"/)
+  assert.match(html, /id="attempt-list"/)
+  assert.doesNotMatch(html, /id="attempt-list"[^>]*aria-live/)
+  assert.match(html, /id="status-text"[^>]*aria-live="polite"/)
 })
 
 test('stopped attempts get a distinct dot color and storage guards against corruption', () => {
@@ -213,7 +217,7 @@ test('generation exposes a keyboard shortcut and locks references while running'
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const app = fs.readFileSync(path.join(root, 'assets', 'js', 'static-image-app.js'), 'utf8')
 
-  assert.match(html, /Ctrl \+ Enter 快速生成/)
+  assert.match(html, /Ctrl\/Cmd \+ Enter 快速生成/)
   assert.match(app, /function onGlobalKeydown\(event\)/)
   assert.match(app, /requestSubmit\(\)/)
   assert.match(app, /生成过程中不能修改参考图/)
