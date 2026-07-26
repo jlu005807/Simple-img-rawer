@@ -497,8 +497,13 @@
         quality: payload.quality || undefined,
       }))
     }
-    const response = await fetchWithTimeout(url, { method: 'POST', headers, body }, node.timeout_seconds, signal)
-    const data = await parseProviderResponse(response, node)
+    const { response, body: responseText } = await fetchWithTimeout(
+      url,
+      { method: 'POST', headers, body },
+      node.timeout_seconds,
+      signal,
+    )
+    const data = parseProviderResponse(response, responseText, node)
     ensureProviderOk(response, data, node)
     return finalizeProviderData(data, url)
   }
@@ -515,13 +520,13 @@
       model: node.model,
       messages: [{ role: 'user', content }],
     }
-    const response = await fetchWithTimeout(
+    const { response, body: responseText } = await fetchWithTimeout(
       url,
       { method: 'POST', headers: authHeaders(node, true), body: JSON.stringify(body) },
       node.timeout_seconds,
       signal,
     )
-    const data = await parseProviderResponse(response, node)
+    const data = parseProviderResponse(response, responseText, node)
     ensureProviderOk(response, data, node)
     return finalizeProviderData(data, url)
   }
@@ -536,13 +541,13 @@
       quality: payload.quality || undefined,
       reference_images: references.length ? references.map((item) => item.url) : undefined,
     })
-    const response = await fetchWithTimeout(
+    const { response, body: responseText } = await fetchWithTimeout(
       url,
       { method: 'POST', headers: authHeaders(node, true), body: JSON.stringify(body) },
       node.timeout_seconds,
       signal,
     )
-    const data = await parseProviderResponse(response, node)
+    const data = parseProviderResponse(response, responseText, node)
     ensureProviderOk(response, data, node)
     return finalizeProviderData(data, url)
   }
@@ -572,13 +577,13 @@
         quality: payload.quality || undefined,
       }))
     }
-    const submitResponse = await fetchWithTimeout(
+    const { response: submitResponse, body: submitText } = await fetchWithTimeout(
       submitUrl,
       { method: 'POST', headers: authHeaders(node, !hasReferences), body },
       node.timeout_seconds,
       signal,
     )
-    const submitData = await parseProviderResponse(submitResponse, node)
+    const submitData = parseProviderResponse(submitResponse, submitText, node)
     ensureProviderOk(submitResponse, submitData, node)
     const immediate = finalizeProviderData(submitData, submitUrl)
     const submitObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(submitData)) || {}
@@ -603,13 +608,13 @@
       pollCount += 1
       setStatus(`异步任务处理中：${node.name}，轮询 ${pollCount} 次`, 'running')
       await sleep(ASYNC_POLL_INTERVAL_MS, signal)
-      const pollResponse = await fetchWithTimeout(
+      const { response: pollResponse, body: pollText } = await fetchWithTimeout(
         pollUrl,
         { method: 'GET', headers: authHeaders(node, false) },
         node.timeout_seconds,
         signal,
       )
-      const pollData = await parseProviderResponse(pollResponse, node)
+      const pollData = parseProviderResponse(pollResponse, pollText, node)
       const pollObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(pollData))
       const status = String((pollObject && pollObject.status) || '').toLowerCase()
       if (status === 'failed') {
@@ -652,8 +657,7 @@
     return data
   }
 
-  async function parseProviderResponse(response, node) {
-    const text = await response.text()
+  function parseProviderResponse(response, text, node) {
     if (!text.trim()) {
       return {}
     }
@@ -740,7 +744,7 @@
     return reason ? `${base}。浏览器原始错误：${reason}` : base
   }
 
-  async function fetchWithTimeout(url, options, seconds, parentSignal) {
+  async function fetchWithTimeout(url, options, seconds, parentSignal, bodyType) {
     const controller = new AbortController()
     let timedOut = false
     const timeoutMs = Math.max(1, Number(seconds) || 180) * 1000
@@ -757,7 +761,10 @@
       }
     }
     try {
-      return await fetch(url, { ...options, signal: controller.signal })
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      // body 读取必须留在超时与停止信号的覆盖范围内，否则 body 挂起时无法取消
+      const body = bodyType === 'blob' ? await response.blob() : await response.text()
+      return { response, body }
     } catch (error) {
       if (parentSignal && parentSignal.aborted) {
         throw new Error('已停止')
@@ -977,11 +984,16 @@
       return
     }
     try {
-      const response = await fetchWithTimeout(downloadUrl, { method: 'GET' }, DOWNLOAD_TIMEOUT_SECONDS, null)
+      const { response, body: blob } = await fetchWithTimeout(
+        downloadUrl,
+        { method: 'GET' },
+        DOWNLOAD_TIMEOUT_SECONDS,
+        null,
+        'blob',
+      )
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
-      const blob = await response.blob()
       const objectUrl = URL.createObjectURL(blob)
       triggerDownload(objectUrl, filename)
       window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
