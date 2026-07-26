@@ -438,10 +438,14 @@
       }))
       state.results = [...resultItems, ...state.results].filter((item) => !isExpired(item))
       state.activeResultId = resultItems[0] ? resultItems[0].id : ''
-      saveLinks()
+      const saveWarning = saveLinks()
       renderResults()
       const seconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
-      setStatus(`生成完成：${result.images.length} 张图片，耗时 ${seconds}s。链接过期后会自动清理。`, 'ok')
+      if (saveWarning) {
+        setStatus(`生成完成：${result.images.length} 张图片，耗时 ${seconds}s。${saveWarning}`, 'error')
+      } else {
+        setStatus(`生成完成：${result.images.length} 张图片，耗时 ${seconds}s。链接过期后会自动清理。`, 'ok')
+      }
     } catch (error) {
       if (state.abortController && state.abortController.signal.aborted) {
         setStatus('已停止当前生成', 'idle')
@@ -942,7 +946,10 @@
     const beforeCount = state.results.length
     state.results = state.results.filter((item) => !isExpired(item))
     if (beforeCount !== state.results.length) {
-      saveLinks()
+      const warning = saveLinks()
+      if (warning) {
+        setStatus(warning, 'error')
+      }
     }
     if (!state.results.length) {
       state.activeResultId = ''
@@ -1073,9 +1080,9 @@
   function clearStoredLinks() {
     state.results = state.results.filter((item) => item.url.startsWith('data:image/'))
     state.activeResultId = state.results[0] ? state.results[0].id : ''
-    saveLinks()
+    const warning = saveLinks()
     renderResults()
-    setStatus('已清理本地保存的结果链接', 'idle')
+    setStatus(warning || '已清理本地保存的结果链接', warning ? 'error' : 'idle')
   }
 
   function activeResult() {
@@ -1169,18 +1176,33 @@
       ...item,
       id: item.id || core.createId('result'),
     }))
-    for (let limit = persistable.length; limit >= 0; limit -= 1) {
+    const items = persistable.slice()
+    while (true) {
       try {
-        window.localStorage.setItem(STORAGE_KEYS.links, JSON.stringify(persistable.slice(0, limit)))
-        if (limit < persistable.length) {
-          setStatus('本地存储空间不足，已只保留最近的结果预览', 'error')
+        window.localStorage.setItem(STORAGE_KEYS.links, JSON.stringify(items))
+        if (items.length < persistable.length) {
+          return `本地存储空间不足，仅保留 ${items.length}/${persistable.length} 条结果记录`
         }
-        return
+        return ''
       } catch {
-        /* try a smaller set */
+        if (!items.length) {
+          break
+        }
+        // 剔除体积最大的一条（通常是内联 b64 巨图），保住其余记录，
+        // 避免单条超配额时把此前保存的历史整批清空
+        let largestIndex = 0
+        let largestSize = -1
+        items.forEach((item, index) => {
+          const size = JSON.stringify(item).length
+          if (size > largestSize) {
+            largestSize = size
+            largestIndex = index
+          }
+        })
+        items.splice(largestIndex, 1)
       }
     }
-    setStatus('浏览器本地存储写入失败', 'error')
+    return '浏览器本地存储写入失败'
   }
 
   function loadJson(key, fallback) {
@@ -1255,6 +1277,10 @@
   }
 
   function isExpired(item) {
+    // 内联 data:image 不会像远程直链那样失效，保留到被配额裁剪或手动清理
+    if (String((item && item.url) || '').startsWith('data:image/')) {
+      return false
+    }
     const expiresAt = Date.parse(item && item.expiresAt)
     return Number.isFinite(expiresAt) && expiresAt <= Date.now()
   }

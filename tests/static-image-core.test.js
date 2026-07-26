@@ -197,7 +197,7 @@ test('persists inline image data so saved results can still preview after reload
     [
       {
         url: 'data:image/png;base64,abc',
-        downloadUrl: 'data:image/png;base64,abc',
+        downloadUrl: '',
         nodeName: 'A',
         protocol: 'openai',
         createdAt,

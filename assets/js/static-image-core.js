@@ -279,15 +279,20 @@
         const url = String((item && item.url) || '').trim()
         return Boolean(url)
       })
-      .map((item) => ({
-        ...(item.id ? { id: String(item.id) } : {}),
-        url: String(item.url).trim(),
-        downloadUrl: String(item.downloadUrl || item.url || '').trim(),
-        nodeName: item.nodeName || '',
-        protocol: item.protocol || '',
-        createdAt: item.createdAt || '',
-        expiresAt: item.expiresAt || '',
-      }))
+      .map((item) => {
+        const url = String(item.url).trim()
+        const downloadUrl = String(item.downloadUrl || '').trim()
+        return {
+          ...(item.id ? { id: String(item.id) } : {}),
+          url,
+          // 与 url 相同的 downloadUrl 不重复存储（b64 巨串会翻倍吃掉配额），读取端会回退到 url
+          downloadUrl: downloadUrl === url ? '' : downloadUrl,
+          nodeName: item.nodeName || '',
+          protocol: item.protocol || '',
+          createdAt: item.createdAt || '',
+          expiresAt: item.expiresAt || '',
+        }
+      })
   }
 
   function resultDisplayUrl(item) {

@@ -102,7 +102,7 @@ test('result previews prefer inline data when a remote URL is blocked', () => {
   assert.match(html, /static-image-app\.js\?v=20260717-studio/)
   assert.match(app, /src="\$\{escapeAttribute\(core\.resultDisplayUrl\(item\)\)\}"/)
   assert.match(app, /elements\.resultPreview\.src\s*=\s*core\.resultDisplayUrl\(active\)/)
-  assert.match(app, /persistable\.slice\(0,\s*limit\)/)
+  assert.match(app, /本地存储空间不足，仅保留/)
   assert.match(readme, /403 Forbidden/)
   assert.match(readme, /localStorage 容量有限/)
 })
