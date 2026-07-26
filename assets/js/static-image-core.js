@@ -237,19 +237,21 @@
 
   function resolveAsyncPollUrl(baseUrl, taskId, pollUrl) {
     const raw = String(pollUrl || '').trim()
-    if (/^https?:\/\//i.test(raw)) {
-      return raw
-    }
     const base = asyncBaseUrl(baseUrl)
-    if (raw.startsWith('/')) {
+    if (/^https?:\/\//i.test(raw)) {
+      // 绝对 poll_url 只信任与节点同主机的，防止 Authorization 头被发往其他域名
+      const host = urlHost(raw)
+      if (host && host === urlHost(base)) {
+        return raw
+      }
+    } else if (raw.startsWith('/')) {
       try {
         const parsed = new URL(base)
         return `${parsed.protocol}//${parsed.host}${raw}`
       } catch {
         return `${base}${raw}`
       }
-    }
-    if (raw) {
+    } else if (raw) {
       return `${trimTrailingSlash(base)}/${raw.replace(/^\/+/, '')}`
     }
     return `${trimTrailingSlash(base)}/async/images/${encodeURIComponent(String(taskId || ''))}`

@@ -14,6 +14,7 @@
   const MAX_REFERENCES = 8
   const ASYNC_POLL_INTERVAL_MS = 4000
   const ASYNC_POLL_BUDGET_MS = 10 * 60 * 1000
+  const ASYNC_POLL_MAX_TRANSIENT_FAILURES = 3
   const RESULT_REFRESH_MS = 30000
   const DOWNLOAD_TIMEOUT_SECONDS = 60
   const IFRAME_CLEANUP_MS = 60000
@@ -644,6 +645,7 @@
 
     const pollDeadline = Date.now() + ASYNC_POLL_BUDGET_MS
     let pollCount = 0
+    let transientFailures = 0
     while (true) {
       throwIfAborted(signal)
       if (Date.now() > pollDeadline) {
@@ -652,13 +654,43 @@
       pollCount += 1
       setStatus(`异步任务处理中：${node.name}，轮询 ${pollCount} 次`, 'running')
       await sleep(ASYNC_POLL_INTERVAL_MS, signal)
-      const { response: pollResponse, body: pollText } = await fetchWithTimeout(
-        pollUrl,
-        { method: 'GET', headers: authHeaders(node, false) },
-        node.timeout_seconds,
-        signal,
-      )
-      const pollData = parseProviderResponse(pollResponse, pollText, node)
+      let pollResponse
+      let pollData
+      try {
+        const polled = await fetchWithTimeout(
+          pollUrl,
+          { method: 'GET', headers: authHeaders(node, false) },
+          node.timeout_seconds,
+          signal,
+        )
+        pollResponse = polled.response
+        pollData = parseProviderResponse(pollResponse, polled.body, node)
+      } catch (error) {
+        // 网络抖动、单次超时或网关错误页不应立即放弃已提交的任务
+        if (signal.aborted) {
+          throw error
+        }
+        transientFailures += 1
+        if (transientFailures >= ASYNC_POLL_MAX_TRANSIENT_FAILURES) {
+          throw error
+        }
+        continue
+      }
+      if (!pollResponse.ok) {
+        const httpError = new Error(
+          `${node.name}: ${errorMessageFromPayload(pollData) || `HTTP ${pollResponse.status}`}`,
+        )
+        // 4xx（除 429）说明任务查询本身被拒绝，重试无意义
+        if (pollResponse.status < 500 && pollResponse.status !== 429) {
+          throw httpError
+        }
+        transientFailures += 1
+        if (transientFailures >= ASYNC_POLL_MAX_TRANSIENT_FAILURES) {
+          throw httpError
+        }
+        continue
+      }
+      transientFailures = 0
       const pollObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(pollData))
       const status = String((pollObject && pollObject.status) || '').toLowerCase()
       if (status === 'failed') {
@@ -708,9 +740,13 @@
     try {
       return JSON.parse(text)
     } catch {
-      const urls = core.extractImageUrls(text)
-      if (urls.length && response.ok) {
-        return { data: urls.map((url) => ({ url })), non_json_url_fallback: true }
+      // HTML 错误页（网关 5xx、登录页）里的图片链接不是生成结果，不做 URL 兜底提取
+      const looksLikeHtml = /^<!doctype\b|^<(?:html|head|body)[\s>]/i.test(text.trim())
+      if (!looksLikeHtml) {
+        const urls = core.extractImageUrls(text)
+        if (urls.length && response.ok) {
+          return { data: urls.map((url) => ({ url })), non_json_url_fallback: true }
+        }
       }
       throw new Error(`${node.name} 返回了非 JSON 响应：${text.slice(0, 120)}`)
     }

@@ -34,6 +34,21 @@ test('resolves documented async image polling URLs', () => {
     core.resolveAsyncPollUrl('https://fnuu.net/v1', '47528f39a8644bdfae66dc0bb1f430dd', ''),
     'https://fnuu.net/async/images/47528f39a8644bdfae66dc0bb1f430dd',
   )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'async/images/task-1'),
+    'https://fnuu.net/async/images/task-1',
+  )
+})
+
+test('only trusts absolute poll URLs on the same host as the node', () => {
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'https://fnuu.net/async/images/task-1'),
+    'https://fnuu.net/async/images/task-1',
+  )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'https://evil.example.com/steal'),
+    'https://fnuu.net/async/images/task-1',
+  )
 })
 
 test('expands auto protocol candidates in fallback order', () => {
