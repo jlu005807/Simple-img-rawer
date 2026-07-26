@@ -56,7 +56,6 @@
     Object.assign(elements, {
       nodeForm: document.querySelector('#node-form'),
       themeToggle: document.querySelector('#theme-toggle'),
-      nodeId: document.querySelector('#node-id'),
       nodeName: document.querySelector('#node-name'),
       nodeBaseUrl: document.querySelector('#node-base-url'),
       nodeApiKey: document.querySelector('#node-api-key'),
@@ -177,7 +176,7 @@
 
   function readNodeForm() {
     return {
-      id: elements.nodeId.value,
+      id: state.editingNodeId,
       name: elements.nodeName.value,
       base_url: elements.nodeBaseUrl.value,
       api_key: elements.nodeApiKey.value,
@@ -191,7 +190,6 @@
 
   function resetNodeForm() {
     state.editingNodeId = ''
-    elements.nodeId.value = ''
     elements.nodeName.value = ''
     elements.nodeBaseUrl.value = ''
     elements.nodeApiKey.value = ''
@@ -206,7 +204,6 @@
 
   function fillNodeForm(node) {
     state.editingNodeId = node.id
-    elements.nodeId.value = node.id
     elements.nodeName.value = node.name
     elements.nodeBaseUrl.value = node.base_url
     elements.nodeApiKey.value = node.api_key
@@ -474,17 +471,14 @@
     try {
       const result = await runWithFallback(enabledNodes, payload, state.references, state.abortController.signal)
       const createdAt = new Date().toISOString()
-      const resultItems = result.images.map((image, index) => ({
+      const resultItems = result.images.map((image) => ({
         id: core.createId('result'),
         url: image.url,
         downloadUrl: image.downloadUrl || '',
         nodeName: result.node.name,
-        nodeId: result.node.id,
         protocol: result.protocol,
         createdAt,
         expiresAt: core.resolveExpiresAt(result.expiresAt, Date.now()),
-        requestUrl: result.requestUrl,
-        index,
       }))
       state.results = [...resultItems, ...state.results].filter((item) => !isExpired(item))
       state.activeResultId = resultItems[0] ? resultItems[0].id : ''
@@ -565,13 +559,10 @@
     return runOpenAiProvider(node, payload, references, signal)
   }
 
-  async function runOpenAiProvider(node, payload, references, signal) {
-    const hasReferences = references.length > 0
-    const url = core.requestUrlFor(node, 'openai', { hasReferences })
-    const headers = authHeaders(node, !hasReferences)
-    let body
-    if (hasReferences) {
-      body = new FormData()
+  // OpenAI 兼容与异步中转的请求体只差参考图字段名
+  function buildImageRequestBody(node, payload, references, referenceField) {
+    if (references.length) {
+      const body = new FormData()
       body.append('model', node.model)
       body.append('prompt', payload.prompt)
       body.append('n', String(payload.n))
@@ -581,16 +572,19 @@
       if (payload.quality) {
         body.append('quality', payload.quality)
       }
-      references.forEach((item) => body.append('image[]', item.file, item.file.name || 'reference.png'))
-    } else {
-      body = JSON.stringify(cleanBody({
-        model: node.model,
-        prompt: payload.prompt,
-        n: payload.n,
-        size: payload.size === 'auto' ? undefined : payload.size,
-        quality: payload.quality || undefined,
-      }))
+      references.forEach((item) => body.append(referenceField, item.file, item.file.name || 'reference.png'))
+      return body
     }
+    return JSON.stringify(cleanBody({
+      model: node.model,
+      prompt: payload.prompt,
+      n: payload.n,
+      size: payload.size === 'auto' ? undefined : payload.size,
+      quality: payload.quality || undefined,
+    }))
+  }
+
+  async function requestProviderData(node, url, headers, body, signal) {
     const { response, body: responseText } = await fetchWithTimeout(
       url,
       { method: 'POST', headers, body },
@@ -599,7 +593,14 @@
     )
     const data = parseProviderResponse(response, responseText, node)
     ensureProviderOk(response, data, node)
-    return finalizeProviderData(data, url)
+    return finalizeProviderData(data)
+  }
+
+  async function runOpenAiProvider(node, payload, references, signal) {
+    const hasReferences = references.length > 0
+    const url = core.requestUrlFor(node, 'openai', { hasReferences })
+    const body = buildImageRequestBody(node, payload, references, 'image[]')
+    return requestProviderData(node, url, authHeaders(node, !hasReferences), body, signal)
   }
 
   async function runChatProvider(node, payload, references, signal) {
@@ -614,15 +615,7 @@
       model: node.model,
       messages: [{ role: 'user', content }],
     }
-    const { response, body: responseText } = await fetchWithTimeout(
-      url,
-      { method: 'POST', headers: authHeaders(node, true), body: JSON.stringify(body) },
-      node.timeout_seconds,
-      signal,
-    )
-    const data = parseProviderResponse(response, responseText, node)
-    ensureProviderOk(response, data, node)
-    return finalizeProviderData(data, url)
+    return requestProviderData(node, url, authHeaders(node, true), JSON.stringify(body), signal)
   }
 
   async function runCustomProvider(node, payload, references, signal) {
@@ -635,42 +628,13 @@
       quality: payload.quality || undefined,
       reference_images: references.length ? references.map((item) => item.url) : undefined,
     })
-    const { response, body: responseText } = await fetchWithTimeout(
-      url,
-      { method: 'POST', headers: authHeaders(node, true), body: JSON.stringify(body) },
-      node.timeout_seconds,
-      signal,
-    )
-    const data = parseProviderResponse(response, responseText, node)
-    ensureProviderOk(response, data, node)
-    return finalizeProviderData(data, url)
+    return requestProviderData(node, url, authHeaders(node, true), JSON.stringify(body), signal)
   }
 
   async function runAsyncProvider(node, payload, references, signal) {
     const submitUrl = core.requestUrlFor(node, 'async')
     const hasReferences = references.length > 0
-    let body
-    if (hasReferences) {
-      body = new FormData()
-      body.append('model', node.model)
-      body.append('prompt', payload.prompt)
-      body.append('n', String(payload.n))
-      if (payload.size !== 'auto') {
-        body.append('size', payload.size)
-      }
-      if (payload.quality) {
-        body.append('quality', payload.quality)
-      }
-      references.forEach((item) => body.append('image', item.file, item.file.name || 'reference.png'))
-    } else {
-      body = JSON.stringify(cleanBody({
-        model: node.model,
-        prompt: payload.prompt,
-        n: payload.n,
-        size: payload.size === 'auto' ? undefined : payload.size,
-        quality: payload.quality || undefined,
-      }))
-    }
+    const body = buildImageRequestBody(node, payload, references, 'image')
     const { response: submitResponse, body: submitText } = await fetchWithTimeout(
       submitUrl,
       { method: 'POST', headers: authHeaders(node, !hasReferences), body },
@@ -679,8 +643,8 @@
     )
     const submitData = parseProviderResponse(submitResponse, submitText, node)
     ensureProviderOk(submitResponse, submitData, node)
-    const immediate = finalizeProviderData(submitData, submitUrl)
-    const submitObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(submitData)) || {}
+    const immediate = finalizeProviderData(submitData)
+    const submitObject = unwrapPayload(submitData) || {}
     const submitStatus = String(submitObject.status || '').toLowerCase()
     if (immediate.urls.length && (!submitObject.task_id || submitStatus === 'completed')) {
       return immediate
@@ -739,26 +703,26 @@
         continue
       }
       transientFailures = 0
-      const pollObject = core.unwrapResponseDataObject(normalizeProviderEnvelope(pollData))
+      const pollObject = unwrapPayload(pollData)
       const status = String((pollObject && pollObject.status) || '').toLowerCase()
       if (status === 'failed') {
         throw new Error(errorMessageFromPayload(pollObject) || '异步任务失败')
       }
       if (status === 'completed') {
-        const completed = finalizeProviderData(pollData, pollUrl)
+        const completed = finalizeProviderData(pollData)
         if (!completed.urls.length) {
           throw new Error('异步任务完成但没有返回图片 URL')
         }
         return completed
       }
-      const maybeUrls = finalizeProviderData(pollData, pollUrl)
+      const maybeUrls = finalizeProviderData(pollData)
       if (maybeUrls.urls.length && !status) {
         return maybeUrls
       }
     }
   }
 
-  function finalizeProviderData(data, requestUrl) {
+  function finalizeProviderData(data) {
     const payload = normalizeProviderEnvelope(data)
     const unwrapped = core.unwrapResponseDataObject(payload)
     const images = core.extractImageResults(payload)
@@ -770,7 +734,6 @@
       images,
       urls: images.map((image) => image.url),
       expiresAt,
-      requestUrl,
     }
   }
 
@@ -779,6 +742,10 @@
       return data.data
     }
     return data
+  }
+
+  function unwrapPayload(data) {
+    return core.unwrapResponseDataObject(normalizeProviderEnvelope(data))
   }
 
   function parseProviderResponse(response, text, node) {
@@ -939,7 +906,7 @@
 
   function addAttempt(attempt) {
     const id = core.createId('attempt')
-    state.attempts.push({ id, ...attempt, time: Date.now() })
+    state.attempts.push({ id, ...attempt })
     renderAttempts()
     return id
   }
@@ -998,11 +965,11 @@
               </div>
             </div>
             <div class="node-actions">
-              <button type="button" title="上移" aria-label="上移节点 ${escapeAttribute(node.name)}" data-node-action="up" data-node-id="${escapeHtml(node.id)}">↑</button>
-              <button type="button" title="下移" aria-label="下移节点 ${escapeAttribute(node.name)}" data-node-action="down" data-node-id="${escapeHtml(node.id)}">↓</button>
-              <button type="button" title="${node.status ? '禁用' : '启用'}" aria-label="${node.status ? '禁用' : '启用'}节点 ${escapeAttribute(node.name)}" data-node-action="toggle" data-node-id="${escapeHtml(node.id)}">${node.status ? '●' : '○'}</button>
-              <button type="button" title="编辑" aria-label="编辑节点 ${escapeAttribute(node.name)}" data-node-action="edit" data-node-id="${escapeHtml(node.id)}">✎</button>
-              <button type="button" title="删除" aria-label="删除节点 ${escapeAttribute(node.name)}" data-node-action="delete" data-node-id="${escapeHtml(node.id)}">×</button>
+              <button type="button" title="上移" aria-label="上移节点 ${escapeAttribute(node.name)}" data-node-action="up" data-node-id="${escapeAttribute(node.id)}">↑</button>
+              <button type="button" title="下移" aria-label="下移节点 ${escapeAttribute(node.name)}" data-node-action="down" data-node-id="${escapeAttribute(node.id)}">↓</button>
+              <button type="button" title="${node.status ? '禁用' : '启用'}" aria-label="${node.status ? '禁用' : '启用'}节点 ${escapeAttribute(node.name)}" data-node-action="toggle" data-node-id="${escapeAttribute(node.id)}">${node.status ? '●' : '○'}</button>
+              <button type="button" title="编辑" aria-label="编辑节点 ${escapeAttribute(node.name)}" data-node-action="edit" data-node-id="${escapeAttribute(node.id)}">✎</button>
+              <button type="button" title="删除" aria-label="删除节点 ${escapeAttribute(node.name)}" data-node-action="delete" data-node-id="${escapeAttribute(node.id)}">×</button>
             </div>
           </li>
         `,
@@ -1204,18 +1171,8 @@
   }
 
   function restoreTheme() {
-    let theme = 'light'
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEYS.theme)
-      if (saved === 'dark' || saved === 'light') {
-        theme = saved
-      } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        theme = 'dark'
-      }
-    } catch {
-      /* keep light */
-    }
-    applyTheme(theme)
+    // index.html 的内联 preApplyTheme 已在绘制前完成保存值/系统偏好推导，直接沿用其结果
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light')
   }
 
   function toggleTheme() {

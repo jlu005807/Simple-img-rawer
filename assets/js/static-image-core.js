@@ -95,8 +95,7 @@
     if (nextProtocol === 'chat') {
       return openAiEndpoint(baseUrl, 'chat/completions')
     }
-    const usesEditEndpoint = opts.operation === 'edit' || opts.hasReferences === true
-    return openAiEndpoint(baseUrl, usesEditEndpoint ? 'images/edits' : 'images/generations')
+    return openAiEndpoint(baseUrl, opts.hasReferences === true ? 'images/edits' : 'images/generations')
   }
 
   function toDataImageUrl(base64Value, format) {
