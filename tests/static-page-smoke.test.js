@@ -9,8 +9,8 @@ test('static entry exposes node setup, generation, and result surfaces', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8')
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 
-  assert.match(html, /assets\/js\/static-image-core\.js\?v=20260717-studio/)
-  assert.match(html, /assets\/js\/static-image-app\.js\?v=20260717-studio/)
+  assert.match(html, /assets\/js\/static-image-core\.js\?v=20260727-hardening/)
+  assert.match(html, /assets\/js\/static-image-app\.js\?v=20260727-hardening/)
   assert.match(html, /assets\/css\/styles\.css/)
   assert.match(html, /id="node-form"/)
   assert.match(html, /id="generation-form"/)
@@ -99,7 +99,7 @@ test('result previews prefer inline data when a remote URL is blocked', () => {
   const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8')
 
   assert.match(html, /预览和下载优先使用内联数据/)
-  assert.match(html, /static-image-app\.js\?v=20260717-studio/)
+  assert.match(html, /static-image-app\.js\?v=20260727-hardening/)
   assert.match(app, /src="\$\{escapeAttribute\(core\.resultDisplayUrl\(item\)\)\}"/)
   assert.match(app, /elements\.resultPreview\.src\s*=\s*core\.resultDisplayUrl\(active\)/)
   assert.match(app, /本地存储空间不足，仅保留/)

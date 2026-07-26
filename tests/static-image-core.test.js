@@ -51,6 +51,58 @@ test('only trusts absolute poll URLs on the same host as the node', () => {
   )
 })
 
+test('routes OpenAI-compatible requests to the edits endpoint when references exist', () => {
+  assert.equal(
+    core.requestUrlFor({ base_url: 'https://api.example.com', api_type: 'openai' }, 'openai', { hasReferences: true }),
+    'https://api.example.com/v1/images/edits',
+  )
+  assert.equal(
+    core.requestUrlFor({ base_url: 'https://api.example.com', api_type: 'openai' }, 'openai', { hasReferences: false }),
+    'https://api.example.com/v1/images/generations',
+  )
+})
+
+test('normalizeNode falls back to sane defaults for dirty stored data', () => {
+  const node = core.normalizeNode({
+    name: '  主节点 ',
+    base_url: 'https://x.example.com///',
+    api_type: 'weird-protocol',
+    model: '',
+    timeout_seconds: 'abc',
+    retry_count: -2,
+  })
+  assert.equal(node.name, '主节点')
+  assert.equal(node.base_url, 'https://x.example.com')
+  assert.equal(node.api_type, 'auto')
+  assert.equal(node.model, 'gpt-image-2')
+  assert.equal(node.timeout_seconds, 180)
+  assert.equal(node.retry_count, 0)
+  assert.equal(node.status, true)
+  assert.ok(node.id.startsWith('node-'))
+})
+
+test('validateNode reports missing fields and passes a complete node', () => {
+  assert.deepEqual(core.validateNode({}), [
+    '请填写节点名称',
+    'base_url 必须以 http:// 或 https:// 开头',
+    '请填写 API Key',
+  ])
+  assert.deepEqual(
+    core.validateNode({ name: 'n', base_url: 'https://api.example.com', api_key: 'sk-1', model: 'm' }),
+    [],
+  )
+})
+
+test('unwrapResponseDataObject only unwraps plain data objects', () => {
+  const inner = { status: 'completed' }
+  assert.equal(core.unwrapResponseDataObject({ data: inner }), inner)
+  const withArray = { data: [{ url: 'https://cdn.example.com/a.png' }] }
+  assert.equal(core.unwrapResponseDataObject(withArray), withArray)
+  assert.equal(core.unwrapResponseDataObject(null), null)
+  const plain = { status: 'queued' }
+  assert.equal(core.unwrapResponseDataObject(plain), plain)
+})
+
 test('expands auto protocol candidates in fallback order', () => {
   assert.deepEqual(core.protocolCandidates({ base_url: 'https://api.example.com', api_type: 'auto' }), ['openai', 'async', 'chat'])
   assert.deepEqual(core.protocolCandidates({ base_url: 'https://fnuu.net', api_type: 'auto' }), ['async', 'openai', 'chat'])
