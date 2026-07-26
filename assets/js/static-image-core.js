@@ -70,6 +70,14 @@
     }
   }
 
+  function urlOrigin(value) {
+    try {
+      return new URL(String(value || '')).origin.toLowerCase()
+    } catch {
+      return ''
+    }
+  }
+
   function isKnownAsyncRelay(baseUrl) {
     return KNOWN_ASYNC_RELAY_HOSTS.has(urlHost(baseUrl))
   }
@@ -238,9 +246,9 @@
     const raw = String(pollUrl || '').trim()
     const base = asyncBaseUrl(baseUrl)
     if (/^https?:\/\//i.test(raw)) {
-      // 绝对 poll_url 只信任与节点同主机的，防止 Authorization 头被发往其他域名
-      const host = urlHost(raw)
-      if (host && host === urlHost(base)) {
+      // 绝对 poll_url 只信任与节点完全同源（协议+主机+端口）的，防止 Authorization 头被发往其他地方
+      const origin = urlOrigin(raw)
+      if (origin && origin === urlOrigin(base)) {
         return raw
       }
     } else if (raw.startsWith('/')) {
@@ -257,12 +265,17 @@
   }
 
   function resolveExpiresAt(upstreamExpiresAt, now) {
+    const nowMs = Number.isFinite(now) ? Number(now) : Date.now()
     if (upstreamExpiresAt !== null && upstreamExpiresAt !== undefined && upstreamExpiresAt !== '') {
       let parsed
       const text = String(upstreamExpiresAt).trim()
       if (typeof upstreamExpiresAt === 'number' || /^\d+$/.test(text)) {
         const numeric = typeof upstreamExpiresAt === 'number' ? upstreamExpiresAt : Number(text)
         parsed = numeric < 100000000000 ? numeric * 1000 : numeric
+        // 换算后早于当前时间的纯数字多半是 TTL 秒数或非 epoch 数字，不可信
+        if (parsed <= nowMs) {
+          parsed = NaN
+        }
       } else {
         parsed = Date.parse(text)
       }
@@ -270,8 +283,7 @@
         return new Date(parsed).toISOString()
       }
     }
-    const base = Number.isFinite(now) ? Number(now) : Date.now()
-    return new Date(base + ONE_HOUR_MS).toISOString()
+    return new Date(nowMs + ONE_HOUR_MS).toISOString()
   }
 
   function persistableResultImages(images) {

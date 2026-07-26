@@ -40,13 +40,21 @@ test('resolves documented async image polling URLs', () => {
   )
 })
 
-test('only trusts absolute poll URLs on the same host as the node', () => {
+test('only trusts absolute poll URLs on the same origin as the node', () => {
   assert.equal(
     core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'https://fnuu.net/async/images/task-1'),
     'https://fnuu.net/async/images/task-1',
   )
   assert.equal(
     core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'https://evil.example.com/steal'),
+    'https://fnuu.net/async/images/task-1',
+  )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'http://fnuu.net/steal'),
+    'https://fnuu.net/async/images/task-1',
+  )
+  assert.equal(
+    core.resolveAsyncPollUrl('https://fnuu.net', 'task-1', 'https://fnuu.net:8443/steal'),
     'https://fnuu.net/async/images/task-1',
   )
 })
@@ -162,10 +170,18 @@ test('keeps b64_json images when the response url field is empty or unusable', (
 })
 
 test('parses numeric and numeric-string expiry timestamps', () => {
-  const now = Date.parse('2026-06-10T10:00:00.000Z')
+  const now = Date.parse('2025-06-10T10:00:00.000Z')
   assert.equal(core.resolveExpiresAt(1765368000, now), new Date(1765368000000).toISOString())
   assert.equal(core.resolveExpiresAt(1765368000000, now), new Date(1765368000000).toISOString())
   assert.equal(core.resolveExpiresAt('1765368000', now), new Date(1765368000000).toISOString())
+})
+
+test('does not trust numeric values that resolve to the past (TTL-like inputs)', () => {
+  const now = Date.parse('2026-06-10T10:00:00.000Z')
+  const fallback = '2026-06-10T11:00:00.000Z'
+  assert.equal(core.resolveExpiresAt(3600, now), fallback)
+  assert.equal(core.resolveExpiresAt('3600', now), fallback)
+  assert.equal(core.resolveExpiresAt('20260727', now), fallback)
 })
 
 test('falls back to one hour for out-of-range or zero timestamps', () => {

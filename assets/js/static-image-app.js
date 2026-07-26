@@ -190,6 +190,7 @@
 
   function resetNodeForm() {
     state.editingNodeId = ''
+    markNodeFormErrors([])
     elements.nodeName.value = ''
     elements.nodeBaseUrl.value = ''
     elements.nodeApiKey.value = ''
@@ -204,6 +205,7 @@
 
   function fillNodeForm(node) {
     state.editingNodeId = node.id
+    markNodeFormErrors([])
     elements.nodeName.value = node.name
     elements.nodeBaseUrl.value = node.base_url
     elements.nodeApiKey.value = node.api_key
@@ -659,11 +661,16 @@
     const pollDeadline = Date.now() + ASYNC_POLL_BUDGET_MS
     let transientFailures = 0
     // 文案保持不变，避免 aria-live 状态栏每 4 秒向读屏用户重复播报
-    setStatus(`异步任务处理中：${node.name}，约每 ${Math.round(ASYNC_POLL_INTERVAL_MS / 1000)} 秒查询一次`, 'running')
+    const runningMessage = `异步任务处理中：${node.name}，约每 ${Math.round(ASYNC_POLL_INTERVAL_MS / 1000)} 秒查询一次`
+    setStatus(runningMessage, 'running')
     while (true) {
       throwIfAborted(signal)
       if (Date.now() > pollDeadline) {
         throw new Error(`异步任务超过 ${Math.round(ASYNC_POLL_BUDGET_MS / 60000)} 分钟仍未完成，已停止轮询`)
+      }
+      // 状态栏被临时提示（如"生成过程中不能修改参考图"）覆盖后自愈，仅在变化时写入
+      if (elements.statusText.dataset.level !== 'running') {
+        setStatus(runningMessage, 'running')
       }
       await sleep(ASYNC_POLL_INTERVAL_MS, signal)
       let pollResponse
@@ -989,7 +996,7 @@
           <figure class="reference-thumb" style="animation-delay: ${Math.min(index * 40, 240)}ms">
             <img src="${escapeAttribute(item.url)}" alt="${escapeAttribute(item.name)}">
             <figcaption>${index + 1}</figcaption>
-            <button type="button" class="reference-remove" data-reference-id="${escapeAttribute(item.id)}" aria-label="移除参考图 ${escapeAttribute(item.name)}" title="移除">×</button>
+            <button type="button" class="reference-remove" data-reference-id="${escapeAttribute(item.id)}" aria-label="移除参考图 ${escapeAttribute(item.name)}" title="移除" ${state.running ? 'disabled' : ''}>×</button>
           </figure>
         `,
       )
@@ -1144,11 +1151,12 @@
   }
 
   function clearStoredLinks() {
-    state.results = state.results.filter((item) => item.url.startsWith('data:image/'))
-    state.activeResultId = state.results[0] ? state.results[0].id : ''
+    // 内联结果不会自动过期，这里是它唯一的手动删除入口，所以清空全部记录
+    state.results = []
+    state.activeResultId = ''
     const warning = saveLinks()
     renderResults()
-    setStatus(warning || '已清理本地保存的结果链接', warning ? 'error' : 'idle')
+    setStatus(warning || '已清空本地保存的结果记录', warning ? 'error' : 'idle')
   }
 
   function activeResult() {
