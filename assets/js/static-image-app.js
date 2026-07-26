@@ -217,6 +217,7 @@
       state.nodes[index].status = !state.nodes[index].status
       saveNodes()
       renderNodes()
+      refocusNodeAction(action, id)
       return
     }
     if (action === 'up' && index > 0) {
@@ -224,6 +225,7 @@
       state.nodes.splice(index - 1, 0, node)
       saveNodes()
       renderNodes()
+      refocusNodeAction(action, id)
       return
     }
     if (action === 'down' && index < state.nodes.length - 1) {
@@ -231,6 +233,7 @@
       state.nodes.splice(index + 1, 0, node)
       saveNodes()
       renderNodes()
+      refocusNodeAction(action, id)
       return
     }
     if (action === 'delete') {
@@ -240,7 +243,22 @@
       }
       saveNodes()
       renderNodes()
+      const remaining = elements.nodeList.querySelectorAll('[data-node-action="delete"]')
+      const fallback = remaining[Math.min(index, remaining.length - 1)]
+      if (fallback) {
+        fallback.focus()
+      }
       setStatus('节点已删除', 'idle')
+    }
+  }
+
+  // innerHTML 重建会让焦点丢到 body，键盘用户需要焦点回到同一按钮才能连续操作
+  function refocusNodeAction(action, id) {
+    for (const button of elements.nodeList.querySelectorAll('[data-node-action]')) {
+      if (button.getAttribute('data-node-action') === action && button.getAttribute('data-node-id') === id) {
+        button.focus()
+        return
+      }
     }
   }
 
@@ -267,6 +285,10 @@
       }
       try {
         const url = await readFileAsDataUrl(file)
+        if (state.running) {
+          setStatus('生成过程中不能修改参考图', 'error')
+          break
+        }
         state.references.push({ id: core.createId('ref'), file, url, name: file.name || 'pasted-image.png' })
         added += 1
       } catch {
@@ -879,6 +901,9 @@
     elements.referenceList.querySelectorAll('button').forEach((control) => {
       control.disabled = value
     })
+    elements.nodeList.querySelectorAll('button').forEach((control) => {
+      control.disabled = value
+    })
     elements.nodeForm.querySelectorAll('input, select, button').forEach((control) => {
       if (control !== elements.resetNode && control !== elements.revealKey) {
         control.disabled = value
@@ -1011,6 +1036,10 @@
         `,
       )
       .join('')
+    updateActiveResultDetail()
+  }
+
+  function updateActiveResultDetail() {
     const active = activeResult()
     if (!active) {
       return
@@ -1028,8 +1057,16 @@
     if (!button) {
       return
     }
-    state.activeResultId = button.getAttribute('data-result-id')
-    renderResults()
+    const id = button.getAttribute('data-result-id')
+    if (id === state.activeResultId) {
+      return
+    }
+    state.activeResultId = id
+    // 只切换选中态和详情区，不整体重建网格（保留焦点，避免大图重复解析）
+    elements.resultGrid.querySelectorAll('.result-tile').forEach((tile) => {
+      tile.classList.toggle('active', tile.getAttribute('data-result-id') === id)
+    })
+    updateActiveResultDetail()
   }
 
   async function copyActiveLink() {
@@ -1272,7 +1309,12 @@
     if (clockTimer) {
       return
     }
-    clockTimer = window.setInterval(renderResults, RESULT_REFRESH_MS)
+    clockTimer = window.setInterval(() => {
+      // 无过期项时不重建 DOM：多张内联大图的全量 innerHTML 重建开销很大
+      if (state.results.some((item) => isExpired(item))) {
+        renderResults()
+      }
+    }, RESULT_REFRESH_MS)
   }
 
   function sleep(ms, signal) {
