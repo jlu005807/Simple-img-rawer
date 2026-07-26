@@ -17,6 +17,7 @@
   const RESULT_REFRESH_MS = 30000
   const DOWNLOAD_TIMEOUT_SECONDS = 60
   const IFRAME_CLEANUP_MS = 60000
+  const OBJECT_URL_REVOKE_MS = 60000
 
   const state = {
     nodes: [],
@@ -335,7 +336,46 @@
     if (!active) {
       return
     }
-    window.open(core.resultDisplayUrl(active), '_blank', 'noopener,noreferrer')
+    openImageUrl(core.resultDisplayUrl(active))
+  }
+
+  function openImageUrl(url) {
+    const target = String(url || '')
+    if (!target) {
+      return
+    }
+    if (target.startsWith('data:')) {
+      // Chromium 禁止顶层导航到 data: URL，先转成 Blob URL 再打开
+      try {
+        const objectUrl = URL.createObjectURL(dataUrlToBlob(target))
+        window.open(objectUrl, '_blank', 'noopener,noreferrer')
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), OBJECT_URL_REVOKE_MS)
+        return
+      } catch {
+        /* data URL 损坏时按原样打开兜底 */
+      }
+    }
+    window.open(target, '_blank', 'noopener,noreferrer')
+  }
+
+  function dataUrlToBlob(dataUrl) {
+    const commaIndex = dataUrl.indexOf(',')
+    if (commaIndex < 0) {
+      throw new Error('无效的 data URL')
+    }
+    const meta = dataUrl.slice(0, commaIndex)
+    const payload = dataUrl.slice(commaIndex + 1)
+    const mimeMatch = /^data:([^;,]+)/i.exec(meta)
+    const mime = (mimeMatch && mimeMatch[1]) || 'image/png'
+    if (/;base64$/i.test(meta)) {
+      const binary = window.atob(payload)
+      const bytes = new Uint8Array(binary.length)
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index)
+      }
+      return new Blob([bytes], { type: mime })
+    }
+    return new Blob([decodeURIComponent(payload)], { type: mime })
   }
 
   function onReferenceRemove(event) {
@@ -969,7 +1009,7 @@
     if (!active) {
       return
     }
-    window.open(active.url, '_blank', 'noopener,noreferrer')
+    openImageUrl(active.url)
   }
 
   async function downloadActiveImage() {
