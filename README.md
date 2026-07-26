@@ -22,10 +22,18 @@
 
 如果你克隆或 fork 这个仓库，需要二选一处理 giscus：
 
-1. 继续使用评论区：在自己的 GitHub 仓库开启 Discussions，到 giscus 配置页生成新的 `data-repo`、`data-repo-id`、`data-category` 和 `data-category-id`，然后替换 `index.html` 里的 giscus 脚本属性。
-2. 弃用评论区：删除 `index.html` 里的 `.giscus-comments` 区块；如果想彻底清理，也可以移除 `static-image-app.js` 中的 `syncGiscusTheme` 和 `postGiscusTheme`。
+1. 继续使用评论区：在自己的 GitHub 仓库开启 Discussions，到 giscus 配置页生成新的 `data-repo`、`data-repo-id`、`data-category` 和 `data-category-id`，然后替换 `static-image-app.js` 中 `mountGiscus` 函数里的对应属性（giscus 脚本由该函数动态注入，保证首屏就是当前主题）。
+2. 弃用评论区：删除 `index.html` 里的 `.giscus-comments` 区块；如果想彻底清理，也可以移除 `static-image-app.js` 中的 `mountGiscus`、`syncGiscusTheme` 和 `postGiscusTheme`。
 
 评论区主题会跟随页面深色/亮色模式切换。
+
+## 安全与信任边界
+
+- API Key 明文保存在浏览器 localStorage（页面上有相同提示），只随生成请求发给你自己填写的节点。
+- giscus 的 `client.js` 以完整页面权限运行在本页面上，这是对 giscus.app 的信任假设；不想承担的话按上文说明删除评论区区块即可。
+- 部署到 GitHub Pages 时注意：同一账号的所有项目 Pages 共享 `https://<用户名>.github.io` 这一个源（origin），该源下任何页面的脚本都能读取本页面存的 localStorage（包括 API Key）。介意的话建议使用自定义域名，或直接本地打开 `index.html` 使用。
+- 多标签页同时使用时，节点与结果的保存是整体覆盖写入，后保存的标签页会覆盖先保存的改动。
+- 异步响应里的 `poll_url` 只有与节点同主机时才会使用，跨主机的绝对地址会被忽略并回退到默认轮询路径，避免 `Authorization` 头被发往其他域名。
 
 ## 使用方式
 
@@ -48,6 +56,8 @@ Base URL 根据协议有不同含义：
 
 `自动` 协议会按当前节点特征选择候选顺序，普通节点优先尝试 OpenAI 兼容接口，已知异步中转节点优先尝试异步接口。
 
+节点超时覆盖从发起请求到响应体读取完成的完整过程，停止按钮同样可以在读取响应体阶段生效。
+
 ## 异步节点
 
 异步协议按 `fnuu.net` 的接口文档处理：
@@ -57,6 +67,8 @@ Base URL 根据协议有不同含义：
 - 参考图生图：使用 `multipart/form-data`，字段名为 `image`，直接上传本地文件；浏览器会自动设置 multipart 边界，代码不会手动写 `Content-Type`。
 - 轮询任务：优先使用提交响应里的 `poll_url`；没有 `poll_url` 时使用 `/async/images/{task_id}`。
 - 轮询间隔：4 秒，符合文档建议的 3-5 秒；单次任务轮询总时长上限 10 分钟，超时会停止并报错，避免卡死在停不下来的任务上。
+- 轮询容错：网络错误、单次超时、5xx/429 或非 JSON 响应会容忍连续 3 次以内的失败并继续轮询（仍受 10 分钟总预算约束）；4xx（除 429）说明任务查询本身被拒绝，会立即失败并显示接口返回的错误。
+- 轮询地址：优先使用与节点同主机的 `poll_url`；跨主机的绝对 `poll_url` 会被忽略，回退到 `/async/images/{task_id}`。
 - 节点超时建议：`gpt-image-2` 单张通常需要 1-3 分钟，建议把节点超时设为 180 秒或更高。
 - 完成结果：`status` 为 `completed` 时，从 `urls` 数组读取临时图片直链；`failed` 时显示接口返回的错误原因。
 
@@ -95,7 +107,9 @@ Access-Control-Allow-Headers: Authorization, Content-Type, Accept
 3. 如果只有远程 URL，先尝试 `fetch -> blob -> download`。
 4. 如果远程 URL 受跨域限制，则触发浏览器直接下载兜底；源站不允许时，静态页面无法强制保存。
 
-为了避免远程图床 403 导致刷新后无法预览，页面会把 `data:image` 一起写入本地结果记录。浏览器 localStorage 容量有限，如果图片数据太大，页面会自动只保留最近能写入的结果。
+为了避免远程图床 403 导致刷新后无法预览，页面会把 `data:image` 一起写入本地结果记录。浏览器 localStorage 容量有限，写入超出配额时页面会逐个剔除体积最大的记录（通常是内联 b64 大图）来保住其余记录，并在状态栏如实提示保留条数。内联 `data:image` 结果不会像远程直链那样按过期时间清理，会一直保留到被配额裁剪或手动点"清理链接"。
+
+内联 `data:image` 图片点击预览放大或"原图"按钮时，页面会先把它转换成 Blob URL 再在新标签页打开——浏览器出于安全原因禁止直接把标签页导航到 `data:` 地址。
 
 ## 项目结构
 
